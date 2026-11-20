@@ -1,0 +1,147 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  --sentinel-bg: #CBB6A4;
+  --sentinel-suede: #F6EFE8;
+  --sentinel-nude: #EFE0D5;
+  --sentinel-inset: #FAF5F0;
+  --sentinel-segment: #E4D1C2;
+  --sentinel-hover: #E7D5C7;
+  --sentinel-border: #B7A18E;
+  --sentinel-border-soft: #D6C3B3;
+  --sentinel-border-nude: #B59B8A;
+  --sentinel-divider: #DECFC2;
+  --sentinel-ink: #221813;
+  --sentinel-ink-secondary: #574438;
+  --sentinel-ink-muted: #755E4F;
+  --sentinel-teal: #0B6B52;
+  --sentinel-teal-hover: #08503D;
+  --sentinel-teal-soft: #DCF2EA;
+  --sentinel-teal-ink: #08503D;
+  --sentinel-accent: #0B6B52;
+  --sentinel-accent-hover: #08503D;
+  --sentinel-accent-soft: #DCF2EA;
+  --sentinel-accent-soft-ink: #08503D;
+  --sentinel-crit: #C62828;
+  --sentinel-crit-bg: #FFF0EE;
+  --sentinel-crit-border: #DC2626;
+  --sentinel-crit-ink: #8F1919;
+  --sentinel-high: #C2550A;
+  --sentinel-high-bg: #FFF5EA;
+  --sentinel-high-border: #D97706;
+  --sentinel-high-ink: #8A3A05;
+}
+
+.dark {
+  --sentinel-bg: #140F0C;
+  --sentinel-suede: #211915;
+  --sentinel-nude: #2B211C;
+  --sentinel-inset: #191310;
+  --sentinel-segment: #362A24;
+  --sentinel-hover: #352822;
+  --sentinel-border: #4A3930;
+  --sentinel-border-soft: #3B2D26;
+  --sentinel-border-nude: #544137;
+  --sentinel-divider: #3B2D26;
+  --sentinel-ink: #F5ECE4;
+  --sentinel-ink-secondary: #D4C2B4;
+  --sentinel-ink-muted: #A99586;
+  --sentinel-teal: #149674;
+  --sentinel-teal-hover: #107C60;
+  --sentinel-teal-soft: #10352B;
+  --sentinel-teal-ink: #6EE7C7;
+  --sentinel-accent: #149674;
+  --sentinel-accent-hover: #107C60;
+  --sentinel-accent-soft: #10352B;
+  --sentinel-accent-soft-ink: #6EE7C7;
+  --sentinel-crit: #F87171;
+  --sentinel-crit-bg: #3A1515;
+  --sentinel-crit-border: #EF4444;
+  --sentinel-crit-ink: #FECACA;
+  --sentinel-high: #FBBF24;
+  --sentinel-high-bg: #36220E;
+  --sentinel-high-border: #F59E0B;
+  --sentinel-high-ink: #FDE68A;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--sentinel-bg);
+    color: var(--sentinel-ink);
+  }
+
+  body {
+    background-color: var(--sentinel-bg);
+    color: var(--sentinel-ink);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+}
+
+.font-title {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+
+.window-suede {
+  background-color: var(--sentinel-suede);
+  border: 1px solid var(--sentinel-border);
+}
+
+.window-nude {
+  background-color: var(--sentinel-nude);
+  border: 1px solid var(--sentinel-border-nude);
+}
+
+.surface-inset {
+  background-color: var(--sentinel-inset);
+  border: 1px solid var(--sentinel-border);
+}
+
+.surface-input {
+  background-color: var(--sentinel-inset);
+  border: 1px solid var(--sentinel-border);
+  color: var(--sentinel-ink);
+}
+
+.surface-input::placeholder {
+  color: var(--sentinel-ink-muted);
+}
+
+.alert-pop-critical {
+  background-color: var(--sentinel-crit-bg);
+  border: 1.5px solid var(--sentinel-crit-border);
+  color: var(--sentinel-crit-ink);
+}
+
+.alert-pop-high {
+  background-color: var(--sentinel-high-bg);
+  border: 1.5px solid var(--sentinel-high-border);
+  color: var(--sentinel-high-ink);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

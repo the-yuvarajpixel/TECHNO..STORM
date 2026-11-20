@@ -1,0 +1,6 @@
+{
+  "name": "Sentinel",
+  "description": "A security monitor built so a breach of it exposes as little as possible — edge redaction, machine-identity fingerprints, honey traps, blast-radius response with undo, and real-time push alerts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,217 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted Sentinel administrator registry entry managed by existing admins.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the administrator."
+        },
+        "grantedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the admin who granted access."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when admin access was granted."
+        }
+      },
+      "required": ["uid", "grantedBy", "createdAt"]
+    },
+    "OperatorPublicInfo": {
+      "title": "OperatorPublicInfo",
+      "description": "Non-PII operator preferences and workspace landing choice stored under operators/{operatorId}/public/info.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the operator."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Operator display name shown in audit logs."
+        },
+        "defaultPortal": {
+          "type": "string",
+          "enum": ["secops", "executive"],
+          "description": "Preferred admin workspace after login."
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "enum": ["en", "es", "fr", "de"],
+          "description": "Selected UI language."
+        },
+        "preferredTheme": {
+          "type": "string",
+          "enum": ["light", "dark"],
+          "description": "Selected UI color mode."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of initial profile creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest update."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "defaultPortal",
+        "preferredLanguage",
+        "preferredTheme",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "OperatorPrivateProfile": {
+      "title": "OperatorPrivateProfile",
+      "description": "PII-isolated operator record containing email and login timestamps, readable only by owner or admin.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the operator."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 254,
+          "description": "Verified operator email address."
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of most recent Firebase login."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of initial profile creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest update."
+        }
+      },
+      "required": ["uid", "email", "lastLoginAt", "createdAt", "updatedAt"]
+    },
+    "OperatorSession": {
+      "title": "OperatorSession",
+      "description": "Immutable sign-in audit record written when an admin authenticates into Sentinel.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the signed-in operator."
+        },
+        "portal": {
+          "type": "string",
+          "enum": ["secops", "executive", "attacker"],
+          "description": "Portal entered during this authenticated session."
+        },
+        "authProvider": {
+          "type": "string",
+          "enum": ["google.com"],
+          "description": "Firebase authentication provider used."
+        },
+        "deviceSummary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Truncated non-PII device/browser label."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when session began."
+        }
+      },
+      "required": ["uid", "portal", "authProvider", "deviceSummary", "createdAt"]
+    },
+    "OperatorChatMessage": {
+      "title": "OperatorChatMessage",
+      "description": "Persisted multi-turn Sentinel Security Analyst chat message scoped strictly to the authenticated operator.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the operator owning this chat thread."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "model"],
+          "description": "Turn author role in the multi-turn conversation."
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000,
+          "description": "Message body text."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Model identifier or operator label for this turn."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when message was recorded."
+        }
+      },
+      "required": ["uid", "role", "content", "model", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted administrator allowlist documents."
+    },
+    "/operators/{operatorId}/public/{docId}": {
+      "schema": { "$ref": "#/entities/OperatorPublicInfo" },
+      "description": "Non-PII operator preferences and workspace choice."
+    },
+    "/operators/{operatorId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/OperatorPrivateProfile" },
+      "description": "PII-isolated operator email and login metadata."
+    },
+    "/operators/{operatorId}/chat_messages/{messageId}": {
+      "schema": { "$ref": "#/entities/OperatorChatMessage" },
+      "description": "Per-operator persistent multi-turn Gemini Security Analyst conversation turns."
+    },
+    "/operator_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/OperatorSession" },
+      "description": "Immutable admin sign-in audit records."
+    }
+  }
+}

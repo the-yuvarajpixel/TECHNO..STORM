@@ -1,0 +1,279 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 0: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // === Global Hardened Primitives ===
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'yuvimyuvarajyuva@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerifiedUser() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isVerifiedOwner(ownerId) {
+      return isVerifiedUser() && request.auth.uid == ownerId;
+    }
+
+    // === Validation Blueprints (Anti-Update-Gap) ===
+    function isValidAdminRecord(data, adminId) {
+      return data.keys().hasAll(['uid', 'grantedBy', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'grantedBy', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.uid == adminId &&
+        isValidId(data.grantedBy) &&
+        data.grantedBy == request.auth.uid &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidOperatorPublicInfo(data, operatorId) {
+      return data.keys().hasAll([
+          'uid',
+          'displayName',
+          'defaultPortal',
+          'preferredLanguage',
+          'preferredTheme',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid',
+          'displayName',
+          'defaultPortal',
+          'preferredLanguage',
+          'preferredTheme',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        isValidId(data.uid) &&
+        data.uid == operatorId &&
+        data.displayName is string &&
+        data.displayName.size() >= 1 &&
+        data.displayName.size() <= 80 &&
+        data.defaultPortal is string &&
+        data.defaultPortal in ['secops', 'executive'] &&
+        data.preferredLanguage is string &&
+        data.preferredLanguage in ['en', 'es', 'fr', 'de'] &&
+        data.preferredTheme is string &&
+        data.preferredTheme in ['light', 'dark'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidOperatorPrivateProfile(data, operatorId) {
+      return data.keys().hasAll(['uid', 'email', 'lastLoginAt', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'lastLoginAt', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == operatorId &&
+        data.email is string &&
+        data.email.size() >= 3 &&
+        data.email.size() <= 254 &&
+        data.email == request.auth.token.email &&
+        data.lastLoginAt is timestamp &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidOperatorChatMessage(data, operatorId) {
+      return data.keys().hasAll(['uid', 'role', 'content', 'model', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'role', 'content', 'model', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.uid == operatorId &&
+        data.uid == request.auth.uid &&
+        data.role is string &&
+        data.role in ['user', 'model'] &&
+        data.content is string &&
+        data.content.size() >= 1 &&
+        data.content.size() <= 8000 &&
+        data.model is string &&
+        data.model.size() >= 1 &&
+        data.model.size() <= 64 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidOperatorSession(data) {
+      return data.keys().hasAll(['uid', 'portal', 'authProvider', 'deviceSummary', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'portal', 'authProvider', 'deviceSummary', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.uid == request.auth.uid &&
+        data.portal is string &&
+        data.portal in ['secops', 'executive', 'attacker'] &&
+        data.authProvider is string &&
+        data.authProvider == 'google.com' &&
+        data.deviceSummary is string &&
+        data.deviceSummary.size() >= 1 &&
+        data.deviceSummary.size() <= 120 &&
+        data.createdAt is timestamp;
+    }
+
+    // === Collection: /admins/{adminId} ===
+    match /admins/{adminId} {
+      allow get: if isVerifiedUser() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isVerifiedUser() &&
+        isValidId(adminId) &&
+        isValidAdminRecord(incoming(), adminId) &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(adminId) && isAdmin() && adminId != request.auth.uid;
+    }
+
+    // === Collection: /operators/{operatorId}/public/{docId} ===
+    match /operators/{operatorId}/public/{docId} {
+      allow get: if isVerifiedUser() &&
+        isValidId(operatorId) &&
+        docId == 'info' &&
+        (isVerifiedOwner(operatorId) || isAdmin());
+
+      allow list: if false;
+
+      allow create: if isVerifiedOwner(operatorId) &&
+        isValidId(operatorId) &&
+        docId == 'info' &&
+        isValidOperatorPublicInfo(incoming(), operatorId) &&
+        incoming().uid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser() &&
+        isValidId(operatorId) &&
+        docId == 'info' &&
+        isValidOperatorPublicInfo(incoming(), operatorId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            isVerifiedOwner(operatorId) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName',
+              'defaultPortal',
+              'preferredLanguage',
+              'preferredTheme',
+              'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // === Collection: /operators/{operatorId}/private/{docId} (PII Isolated) ===
+    match /operators/{operatorId}/private/{docId} {
+      allow get: if isVerifiedUser() &&
+        isValidId(operatorId) &&
+        docId == 'profile' &&
+        (isVerifiedOwner(operatorId) || isAdmin());
+
+      allow list: if false;
+
+      allow create: if isVerifiedOwner(operatorId) &&
+        isValidId(operatorId) &&
+        docId == 'profile' &&
+        isValidOperatorPrivateProfile(incoming(), operatorId) &&
+        incoming().uid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        incoming().lastLoginAt == request.time;
+
+      allow update: if isVerifiedUser() &&
+        isValidId(operatorId) &&
+        docId == 'profile' &&
+        isValidOperatorPrivateProfile(incoming(), operatorId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().lastLoginAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            isVerifiedOwner(operatorId) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'email',
+              'lastLoginAt',
+              'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // === Collection: /operators/{operatorId}/chat_messages/{messageId} ===
+    match /operators/{operatorId}/chat_messages/{messageId} {
+      allow get: if isVerifiedUser() &&
+        isValidId(operatorId) &&
+        isValidId(messageId) &&
+        (isVerifiedOwner(operatorId) || isAdmin());
+
+      allow list: if isVerifiedUser() &&
+        isValidId(operatorId) &&
+        (
+          (isVerifiedOwner(operatorId) && resource.data.uid == request.auth.uid) ||
+          isBootstrappedAdmin()
+        );
+
+      allow create: if isVerifiedOwner(operatorId) &&
+        isValidId(operatorId) &&
+        isValidId(messageId) &&
+        isValidOperatorChatMessage(incoming(), operatorId) &&
+        incoming().createdAt == request.time;
+
+      allow update: if false;
+
+      allow delete: if isVerifiedUser() &&
+        isValidId(operatorId) &&
+        isValidId(messageId) &&
+        (isVerifiedOwner(operatorId) || isAdmin());
+    }
+
+    // === Collection: /operator_sessions/{sessionId} (Immutable Sign-In Audit Log) ===
+    match /operator_sessions/{sessionId} {
+      allow get: if isVerifiedUser() &&
+        isValidId(sessionId) &&
+        (existing().uid == request.auth.uid || isAdmin());
+
+      allow list: if isVerifiedUser() &&
+        (resource.data.uid == request.auth.uid || isBootstrappedAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(sessionId) &&
+        isValidOperatorSession(incoming()) &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/operators/$(incoming().uid)/public/info);
+
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}
