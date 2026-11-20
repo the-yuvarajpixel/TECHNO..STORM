@@ -127,7 +127,7 @@ The repository is pre-configured for Netlify via `netlify.toml`, `netlify/functi
 ├── public/                        # Static assets, _headers, _redirects
 └── src/
     ├── App.tsx                    # Root shell, unified Admin Portal & view routing
-    ├── index.css                  # Design tokens & typography (Newsreader / Public Sans / IBM Plex Mono)
+    ├── index.css                  # Design tokens & typography (Plus Jakarta Sans / DM Sans / JetBrains Mono)
     ├── components/                # UI views, Breach Drill panel, Chatbot drawer, Search/Filter bar
     ├── core/                      # Edge redaction, pipeline, fingerprints, breach drill, vault store & tests
     ├── lib/                       # API client, Firebase Auth/Firestore helpers, CSV export, i18n

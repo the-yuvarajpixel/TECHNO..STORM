@@ -44,6 +44,7 @@ import { DriftToolkitView } from './components/DriftToolkitView';
 import { VaultIngestView } from './components/VaultIngestView';
 import { WebhooksNotificationsView } from './components/WebhooksNotificationsView';
 import { ArchitectureIntegrationView } from './components/ArchitectureIntegrationView';
+import { AiStudioView } from './components/AiStudioView';
 import { ExecutivePortalView } from './components/ExecutivePortalView';
 import { AttackerPortalView } from './components/AttackerPortalView';
 import { PhoneAttackerModal } from './components/PhoneAttackerModal';
@@ -170,6 +171,7 @@ export default function App() {
     scenarioId: BreachDrillScenario['id'];
     cadence: BreachDrillCadence;
     status: 'running' | 'paused' | 'completed' | 'aborted';
+    startedAt: string;
     nextStepIndex: number;
     results: BreachDrillStepExecutionResult[];
     error: string | null;
@@ -197,6 +199,7 @@ export default function App() {
     { id: 'drift_toolkit', label: copy.navDriftToolkit, breadcrumb: copy.navDriftToolkit, icon: FileCheck2 },
     { id: 'vault', label: copy.navVault, breadcrumb: copy.navVault, icon: Database },
     { id: 'webhooks', label: copy.navWebhooks, breadcrumb: copy.navWebhooks, icon: Webhook },
+    { id: 'ai_studio', label: 'AI Studio', breadcrumb: 'AI Command Studio', icon: Sparkles },
     { id: 'architecture', label: copy.navArchitecture, breadcrumb: copy.navArchitecture, icon: Layers },
   ];
 
@@ -685,11 +688,13 @@ export default function App() {
     setDrillModalOpen(false);
     navigateToPortal('admin');
     setActiveView('overview');
+    const startedAt = new Date().toISOString();
     setActiveDrill({
       drillId,
       scenarioId,
       cadence,
       status: 'running',
+      startedAt,
       nextStepIndex: 0,
       results: [],
       error: null,
@@ -1250,6 +1255,7 @@ export default function App() {
                     scenario={scenario}
                     cadence={activeDrill.cadence}
                     status={activeDrill.status}
+                    startedAt={activeDrill.startedAt}
                     currentStepIndex={activeDrill.nextStepIndex}
                     firingStepIndex={firingDrillStep}
                     results={activeDrill.results}
@@ -1438,6 +1444,13 @@ export default function App() {
                       onDeleteWebhook={handleDeleteWebhook}
                       onTestWebhook={handleTestWebhook}
                       busyAction={busyAction}
+                    />
+                  )}
+
+                  {activeView === 'ai_studio' && (
+                    <AiStudioView
+                      snapshot={snapshot}
+                      onScanTranscript={handleScanTicket}
                     />
                   )}
 

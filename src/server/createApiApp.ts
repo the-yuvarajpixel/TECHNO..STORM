@@ -6,7 +6,12 @@ import {
   type BreachDrillStepExecutionResult,
 } from '../core/breachDrill.ts';
 import {
+  createOrEditImageWithGemini,
+  formatGeminiError,
+  generateOrAnimateVideoWithGemini,
+  runMapsGroundedQuery,
   runSentinelSecurityChat,
+  transcribeAudioWithGemini,
   type SentinelChatModelMode,
   type SentinelChatTurn,
 } from './gemini.ts';
@@ -35,7 +40,7 @@ export function createSentinelApiApp(options?: CreateSentinelApiOptions): {
   store: SentinelEngineStore;
 } {
   const app = express();
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '25mb' }));
 
   // Ensure Firebase popup auth works cleanly across browsers, Netlify, and reverse proxies
   app.use((_req, res, next) => {
@@ -593,6 +598,102 @@ export function createSentinelApiApp(options?: CreateSentinelApiOptions): {
       res.status(500).json({
         error: err instanceof Error ? err.message : 'Breach drill stage failed',
       });
+    }
+  });
+
+  // --- Multimodal Gemini Operations Endpoints ---
+
+  app.post('/api/ai/maps', async (req, res) => {
+    const body = req.body ?? {};
+    if (typeof body.query !== 'string' || !body.query.trim()) {
+      res.status(400).json({ error: 'query is required.' });
+      return;
+    }
+    try {
+      const snap = store.getSnapshot();
+      const result = await runMapsGroundedQuery({
+        query: body.query,
+        latitude: typeof body.latitude === 'number' ? body.latitude : undefined,
+        longitude: typeof body.longitude === 'number' ? body.longitude : undefined,
+        region: snap.controlPlane.region,
+      });
+      res.json(result);
+    } catch (err) {
+      const formatted = formatGeminiError(err, 'gemini-4-hydrogen');
+      res.status(formatted.status).json({ error: formatted.message });
+    }
+  });
+
+  app.post('/api/ai/transcribe', async (req, res) => {
+    const body = req.body ?? {};
+    if (typeof body.audioBase64 !== 'string' || !body.audioBase64.trim()) {
+      res.status(400).json({ error: 'audioBase64 is required.' });
+      return;
+    }
+    try {
+      const result = await transcribeAudioWithGemini({
+        audioBase64: body.audioBase64,
+        mimeType: typeof body.mimeType === 'string' ? body.mimeType : 'audio/webm',
+        instruction: typeof body.instruction === 'string' ? body.instruction : undefined,
+      });
+      res.json(result);
+    } catch (err) {
+      const formatted = formatGeminiError(err, 'gemini-3.5-transcribe');
+      res.status(formatted.status).json({ error: formatted.message });
+    }
+  });
+
+  app.post('/api/ai/image', async (req, res) => {
+    const body = req.body ?? {};
+    if (typeof body.prompt !== 'string' || !body.prompt.trim()) {
+      res.status(400).json({ error: 'prompt is required.' });
+      return;
+    }
+    try {
+      const allowedRatios = new Set(['1:1', '16:9', '9:16', '4:3', '3:4']);
+      const aspectRatio = allowedRatios.has(body.aspectRatio) ? body.aspectRatio : '16:9';
+      const imageSize = body.imageSize === '2K' ? '2K' : '1K';
+      const result = await createOrEditImageWithGemini({
+        prompt: body.prompt,
+        sourceImageBase64:
+          typeof body.sourceImageBase64 === 'string' ? body.sourceImageBase64 : undefined,
+        sourceMimeType:
+          typeof body.sourceMimeType === 'string' ? body.sourceMimeType : undefined,
+        aspectRatio,
+        imageSize,
+      });
+      res.json(result);
+    } catch (err) {
+      const formatted = formatGeminiError(err, 'gemini-nano-banana-2.1');
+      res.status(formatted.status).json({ error: formatted.message });
+    }
+  });
+
+  app.post('/api/ai/video', async (req, res) => {
+    const body = req.body ?? {};
+    const prompt = typeof body.prompt === 'string' ? body.prompt : '';
+    const sourceImageBase64 =
+      typeof body.sourceImageBase64 === 'string' ? body.sourceImageBase64 : undefined;
+    if (!prompt.trim() && !sourceImageBase64) {
+      res.status(400).json({ error: 'Either prompt or sourceImageBase64 is required.' });
+      return;
+    }
+    try {
+      const aspectRatio: '16:9' | '9:16' = body.aspectRatio === '9:16' ? '9:16' : '16:9';
+      const duration: '5s' | '8s' | '10s' =
+        body.duration === '8s' || body.duration === '10s' ? body.duration : '5s';
+      const result = await generateOrAnimateVideoWithGemini({
+        prompt,
+        sourceImageBase64,
+        sourceMimeType:
+          typeof body.sourceMimeType === 'string' ? body.sourceMimeType : undefined,
+        aspectRatio,
+        duration,
+      });
+      res.json(result);
+    } catch (err) {
+      const formatted = formatGeminiError(err, 'gemini-omni-1.2-flash');
+      res.status(formatted.status).json({ error: formatted.message });
     }
   });
 

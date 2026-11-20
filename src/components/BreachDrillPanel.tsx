@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import {
   Activity,
   CheckCircle2,
@@ -15,6 +15,16 @@ import {
   Square,
   X,
 } from 'lucide-react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import {
   BREACH_DRILL_SCENARIOS,
   type BreachDrillScenario,
@@ -225,6 +235,7 @@ interface BreachDrillDockProps {
   scenario: BreachDrillScenario;
   cadence: BreachDrillCadence;
   status: 'running' | 'paused' | 'completed' | 'aborted';
+  startedAt?: string;
   currentStepIndex: number;
   firingStepIndex: number | null;
   results: BreachDrillStepExecutionResult[];
@@ -240,10 +251,39 @@ interface BreachDrillDockProps {
   busyAction: string | null;
 }
 
+interface DrillProgressPoint {
+  elapsedSec: number;
+  completionPct: number;
+  completedCount: number;
+  totalStages: number;
+  timeLabel: string;
+  stageLabel: string;
+  system: string;
+  mitreTactic?: string;
+  isLiveTail?: boolean;
+}
+
+function formatClockTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '--:--:--';
+  return date.toLocaleTimeString([], {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function formatElapsedAxis(seconds: number): string {
+  const rounded = Math.round(seconds * 10) / 10;
+  return `+${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)}s`;
+}
+
 export function BreachDrillDock({
   scenario,
   cadence,
   status,
+  startedAt,
   currentStepIndex,
   firingStepIndex,
   results,
@@ -259,10 +299,111 @@ export function BreachDrillDock({
   busyAction,
 }: BreachDrillDockProps) {
   const [expanded, setExpanded] = useState(true);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const chartGradientId = useId().replace(/:/g, '');
 
   const totalStages = scenario.stages.length;
   const completedStages = results.length;
   const progressPct = Math.round((completedStages / Math.max(1, totalStages)) * 100);
+
+  // Keep elapsed timeline progressing smoothly while a drill is actively running
+  useEffect(() => {
+    if (status !== 'running') return;
+    setNowMs(Date.now());
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 500);
+    return () => window.clearInterval(intervalId);
+  }, [status, completedStages]);
+
+  const { progressSeries, maxElapsedSec, elapsedTotalSec } = useMemo(() => {
+    const sortedResults = [...results].sort((a, b) => a.stepIndex - b.stepIndex);
+    const parsedStartMs = startedAt ? Date.parse(startedAt) : Number.NaN;
+    const firstResultMs = sortedResults[0] ? Date.parse(sortedResults[0].executedAt) : Number.NaN;
+    const originMs = !Number.isNaN(parsedStartMs)
+      ? parsedStartMs
+      : !Number.isNaN(firstResultMs)
+        ? firstResultMs - 1000
+        : nowMs;
+    const originIso = new Date(originMs).toISOString();
+
+    const points: DrillProgressPoint[] = [
+      {
+        elapsedSec: 0,
+        completionPct: 0,
+        completedCount: 0,
+        totalStages,
+        timeLabel: formatClockTime(originIso),
+        stageLabel: 'Drill initialized',
+        system: scenario.name,
+      },
+    ];
+
+    let lastElapsed = 0;
+    sortedResults.forEach((res, idx) => {
+      const execMs = Date.parse(res.executedAt);
+      const rawElapsed = Number.isNaN(execMs) ? (idx + 1) * 1.5 : (execMs - originMs) / 1000;
+      const elapsedSec = Number(Math.max(lastElapsed + 0.1, rawElapsed).toFixed(1));
+      lastElapsed = elapsedSec;
+      const completedCount = idx + 1;
+      points.push({
+        elapsedSec,
+        completionPct: Math.round((completedCount / Math.max(1, totalStages)) * 100),
+        completedCount,
+        totalStages,
+        timeLabel: formatClockTime(res.executedAt),
+        stageLabel: `0${res.stepIndex + 1} · ${res.stepTitle}`,
+        system: res.system,
+        mitreTactic: res.mitreTactic,
+      });
+    });
+
+    if (status === 'running' && completedStages < totalStages) {
+      const liveElapsed = Number(Math.max(lastElapsed + 0.2, (nowMs - originMs) / 1000).toFixed(1));
+      lastElapsed = liveElapsed;
+      points.push({
+        elapsedSec: liveElapsed,
+        completionPct: progressPct,
+        completedCount: completedStages,
+        totalStages,
+        timeLabel: formatClockTime(new Date(nowMs).toISOString()),
+        stageLabel:
+          firingStepIndex !== null
+            ? `Running stage 0${firingStepIndex + 1}...`
+            : `Awaiting stage 0${Math.min(completedStages + 1, totalStages)}`,
+        system:
+          scenario.stages[Math.min(completedStages, totalStages - 1)]?.system ?? scenario.name,
+        isLiveTail: true,
+      });
+    }
+
+    const domainMax = Math.max(
+      scenario.estimatedDurationSec,
+      Math.ceil(lastElapsed + 1),
+      4,
+    );
+
+    return {
+      progressSeries: points,
+      maxElapsedSec: domainMax,
+      elapsedTotalSec: lastElapsed,
+    };
+  }, [
+    results,
+    startedAt,
+    nowMs,
+    totalStages,
+    scenario.name,
+    scenario.estimatedDurationSec,
+    scenario.stages,
+    status,
+    completedStages,
+    progressPct,
+    firingStepIndex,
+  ]);
+
+  const chartStrokeColor =
+    status === 'completed' ? 'var(--sentinel-accent)' : 'var(--sentinel-high)';
 
   // Live SecOps readiness scorecard computed from actual operator actions on drill alerts
   const drillAlertIds = results
@@ -458,6 +599,152 @@ export function BreachDrillDock({
               <p className="text-base font-mono font-bold tabular-nums text-[var(--sentinel-accent)]">
                 {readinessScore}%
               </p>
+            </div>
+          </div>
+
+          {/* Stage Completion Progress Over Time Chart */}
+          <div
+            data-testid="breach-drill-progress-chart"
+            className="surface-inset rounded-md p-3.5 space-y-2.5"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div className="space-y-0.5">
+                <h3 className="font-title text-sm font-semibold text-[var(--sentinel-ink)]">
+                  Stage Completion Over Time
+                </h3>
+                <p className="text-[11px] text-[var(--sentinel-ink-muted)] tabular-nums">
+                  {scenario.name} · {completedStages}/{totalStages} stages completed ({progressPct}%) · Elapsed {formatElapsedAxis(elapsedTotalSec)}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] font-mono text-[var(--sentinel-ink-secondary)] tabular-nums">
+                <span>Cadence: {cadence}</span>
+                <span aria-hidden="true">·</span>
+                <span>Target: ~{scenario.estimatedDurationSec}s</span>
+              </div>
+            </div>
+
+            <div className="h-44 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={progressSeries}
+                  margin={{ top: 8, right: 12, left: -16, bottom: 2 }}
+                >
+                  <defs>
+                    <linearGradient id={chartGradientId} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={chartStrokeColor} stopOpacity={0.28} />
+                      <stop offset="95%" stopColor={chartStrokeColor} stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="var(--sentinel-divider)"
+                  />
+                  <XAxis
+                    dataKey="elapsedSec"
+                    type="number"
+                    domain={[0, maxElapsedSec]}
+                    tickFormatter={formatElapsedAxis}
+                    tick={{
+                      fill: 'var(--sentinel-ink-muted)',
+                      fontSize: 11,
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                    axisLine={{ stroke: 'var(--sentinel-border-soft)' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    domain={[0, 100]}
+                    ticks={[0, 25, 50, 75, 100]}
+                    tickFormatter={(val: number) => `${val}%`}
+                    tick={{
+                      fill: 'var(--sentinel-ink-muted)',
+                      fontSize: 11,
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <ReferenceLine
+                    y={100}
+                    stroke="var(--sentinel-accent)"
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.45}
+                  />
+                  <Tooltip
+                    cursor={{
+                      stroke: 'var(--sentinel-border)',
+                      strokeWidth: 1,
+                      strokeDasharray: '3 3',
+                    }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const pt = payload[0]?.payload as DrillProgressPoint | undefined;
+                      if (!pt) return null;
+                      return (
+                        <div className="window-suede rounded-md px-3 py-2 shadow-lg max-w-xs space-y-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-mono text-xs font-bold tabular-nums text-[var(--sentinel-ink)]">
+                              {pt.completionPct}% complete
+                            </span>
+                            <span className="font-mono text-[11px] tabular-nums text-[var(--sentinel-ink-muted)]">
+                              {pt.timeLabel} ({formatElapsedAxis(pt.elapsedSec)})
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-[var(--sentinel-ink)] leading-snug">
+                            {pt.stageLabel}
+                          </p>
+                          <p className="text-[11px] text-[var(--sentinel-ink-secondary)]">
+                            {pt.system}
+                            {pt.mitreTactic ? ` · ${pt.mitreTactic}` : ''}
+                            {` · ${pt.completedCount}/${pt.totalStages} stages`}
+                          </p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Area
+                    type="stepAfter"
+                    dataKey="completionPct"
+                    stroke={chartStrokeColor}
+                    strokeWidth={2}
+                    fill={`url(#${chartGradientId})`}
+                    isAnimationActive={false}
+                    dot={(dotProps) => {
+                      const { cx, cy, payload, index } = dotProps as {
+                        cx?: number;
+                        cy?: number;
+                        payload?: DrillProgressPoint;
+                        index?: number;
+                      };
+                      if (
+                        typeof cx !== 'number' ||
+                        typeof cy !== 'number' ||
+                        payload?.isLiveTail
+                      ) {
+                        return <g key={`dot-skip-${index ?? 0}`} />;
+                      }
+                      return (
+                        <circle
+                          key={`dot-${index ?? 0}`}
+                          cx={cx}
+                          cy={cy}
+                          r={3.5}
+                          fill="var(--sentinel-suede)"
+                          stroke={chartStrokeColor}
+                          strokeWidth={2}
+                        />
+                      );
+                    }}
+                    activeDot={{
+                      r: 5,
+                      fill: chartStrokeColor,
+                      stroke: 'var(--sentinel-suede)',
+                      strokeWidth: 2,
+                    }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
 

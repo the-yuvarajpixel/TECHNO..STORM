@@ -8,6 +8,7 @@ export type NavSection =
   | 'drift_toolkit'
   | 'vault'
   | 'webhooks'
+  | 'ai_studio'
   | 'architecture';
 
 export interface DemoStep {

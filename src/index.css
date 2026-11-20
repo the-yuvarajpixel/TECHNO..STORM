@@ -2,71 +2,73 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-display: "Newsreader", Georgia, "Times New Roman", serif;
-  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* Crisp Architectural Porcelain & Electric Cobalt Light Template */
 :root {
-  --sentinel-bg: #CBB6A4;
-  --sentinel-suede: #F6EFE8;
-  --sentinel-nude: #EFE0D5;
-  --sentinel-inset: #FAF5F0;
-  --sentinel-segment: #E4D1C2;
-  --sentinel-hover: #E7D5C7;
-  --sentinel-border: #B7A18E;
-  --sentinel-border-soft: #D6C3B3;
-  --sentinel-border-nude: #B59B8A;
-  --sentinel-divider: #DECFC2;
-  --sentinel-ink: #221813;
-  --sentinel-ink-secondary: #574438;
-  --sentinel-ink-muted: #755E4F;
-  --sentinel-teal: #0B6B52;
-  --sentinel-teal-hover: #08503D;
-  --sentinel-teal-soft: #DCF2EA;
-  --sentinel-teal-ink: #08503D;
-  --sentinel-accent: #0B6B52;
-  --sentinel-accent-hover: #08503D;
-  --sentinel-accent-soft: #DCF2EA;
-  --sentinel-accent-soft-ink: #08503D;
-  --sentinel-crit: #C62828;
-  --sentinel-crit-bg: #FFF0EE;
-  --sentinel-crit-border: #DC2626;
-  --sentinel-crit-ink: #8F1919;
-  --sentinel-high: #C2550A;
-  --sentinel-high-bg: #FFF5EA;
-  --sentinel-high-border: #D97706;
-  --sentinel-high-ink: #8A3A05;
+  --sentinel-bg: #F1F5F9;
+  --sentinel-suede: #FFFFFF;
+  --sentinel-nude: #F8FAFC;
+  --sentinel-inset: #F1F5F9;
+  --sentinel-segment: #E2E8F0;
+  --sentinel-hover: #E9EFF6;
+  --sentinel-border: #CBD5E1;
+  --sentinel-border-soft: #E2E8F0;
+  --sentinel-border-nude: #CBD5E1;
+  --sentinel-divider: #E2E8F0;
+  --sentinel-ink: #0F172A;
+  --sentinel-ink-secondary: #334155;
+  --sentinel-ink-muted: #64748B;
+  --sentinel-teal: #059669;
+  --sentinel-teal-hover: #047857;
+  --sentinel-teal-soft: #ECFDF5;
+  --sentinel-teal-ink: #065F46;
+  --sentinel-accent: #1D4ED8;
+  --sentinel-accent-hover: #1E40AF;
+  --sentinel-accent-soft: #EFF6FF;
+  --sentinel-accent-soft-ink: #1E3A8A;
+  --sentinel-crit: #DC2626;
+  --sentinel-crit-bg: #FEF2F2;
+  --sentinel-crit-border: #EF4444;
+  --sentinel-crit-ink: #991B1B;
+  --sentinel-high: #D97706;
+  --sentinel-high-bg: #FFFBEB;
+  --sentinel-high-border: #F59E0B;
+  --sentinel-high-ink: #92400E;
 }
 
+/* Deep Obsidian Slate & Luminous Cobalt Dark Template */
 .dark {
-  --sentinel-bg: #140F0C;
-  --sentinel-suede: #211915;
-  --sentinel-nude: #2B211C;
-  --sentinel-inset: #191310;
-  --sentinel-segment: #362A24;
-  --sentinel-hover: #352822;
-  --sentinel-border: #4A3930;
-  --sentinel-border-soft: #3B2D26;
-  --sentinel-border-nude: #544137;
-  --sentinel-divider: #3B2D26;
-  --sentinel-ink: #F5ECE4;
-  --sentinel-ink-secondary: #D4C2B4;
-  --sentinel-ink-muted: #A99586;
-  --sentinel-teal: #149674;
-  --sentinel-teal-hover: #107C60;
-  --sentinel-teal-soft: #10352B;
-  --sentinel-teal-ink: #6EE7C7;
-  --sentinel-accent: #149674;
-  --sentinel-accent-hover: #107C60;
-  --sentinel-accent-soft: #10352B;
-  --sentinel-accent-soft-ink: #6EE7C7;
+  --sentinel-bg: #070B14;
+  --sentinel-suede: #0F172A;
+  --sentinel-nude: #131D33;
+  --sentinel-inset: #0B1220;
+  --sentinel-segment: #1E293B;
+  --sentinel-hover: #1E293B;
+  --sentinel-border: #26344B;
+  --sentinel-border-soft: #1E293B;
+  --sentinel-border-nude: #2A3A54;
+  --sentinel-divider: #1E293B;
+  --sentinel-ink: #F8FAFC;
+  --sentinel-ink-secondary: #CBD5E1;
+  --sentinel-ink-muted: #94A3B8;
+  --sentinel-teal: #10B981;
+  --sentinel-teal-hover: #059669;
+  --sentinel-teal-soft: #06281E;
+  --sentinel-teal-ink: #6EE7B7;
+  --sentinel-accent: #3B82F6;
+  --sentinel-accent-hover: #2563EB;
+  --sentinel-accent-soft: #10203E;
+  --sentinel-accent-soft-ink: #93C5FD;
   --sentinel-crit: #F87171;
-  --sentinel-crit-bg: #3A1515;
+  --sentinel-crit-bg: #2E1115;
   --sentinel-crit-border: #EF4444;
   --sentinel-crit-ink: #FECACA;
   --sentinel-high: #FBBF24;
-  --sentinel-high-bg: #36220E;
+  --sentinel-high-bg: #2A1E0A;
   --sentinel-high-border: #F59E0B;
   --sentinel-high-ink: #FDE68A;
 }
@@ -76,6 +78,7 @@
     font-family: var(--font-sans);
     background-color: var(--sentinel-bg);
     color: var(--sentinel-ink);
+    scroll-behavior: smooth;
   }
 
   body {
@@ -86,7 +89,7 @@
   h1, h2, h3, h4 {
     font-family: var(--font-display);
     font-optical-sizing: auto;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.025em;
     text-wrap: balance;
   }
 }
@@ -94,7 +97,7 @@
 .font-title {
   font-family: var(--font-display);
   font-optical-sizing: auto;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
 }
 
 .window-suede {
@@ -109,11 +112,11 @@
 
 .surface-inset {
   background-color: var(--sentinel-inset);
-  border: 1px solid var(--sentinel-border);
+  border: 1px solid var(--sentinel-border-soft);
 }
 
 .surface-input {
-  background-color: var(--sentinel-inset);
+  background-color: var(--sentinel-suede);
   border: 1px solid var(--sentinel-border);
   color: var(--sentinel-ink);
 }

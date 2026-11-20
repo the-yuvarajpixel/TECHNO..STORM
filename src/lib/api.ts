@@ -34,6 +34,9 @@ async function requestJson<T>(url: string, options?: RequestInit, retries = 1): 
         return requestJson<T>(url, options, retries - 1);
       }
       if (res.status === 404) {
+        if (typeof data?.error === 'string' && data.error.trim().length > 0) {
+          throw new Error(data.error);
+        }
         throw new Error(
           'Sentinel API endpoint returned 404. On Netlify, deploy the full repository (with netlify.toml & netlify/functions/api.ts) rather than a static-only dist upload, or set VITE_API_BASE_URL.',
         );
@@ -312,7 +315,108 @@ export const sentinelApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  queryMapsGrounding: (payload: {
+    query: string;
+    latitude?: number;
+    longitude?: number;
+  }) =>
+    requestJson<{
+      answer: string;
+      model: string;
+      sources: Array<{
+        title: string;
+        uri: string;
+        placeId?: string;
+        reviewSnippets: Array<{ text: string; uri?: string }>;
+      }>;
+      timestamp: string;
+    }>(
+      '/api/ai/maps',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      0,
+    ),
+
+  transcribeAudio: (payload: {
+    audioBase64: string;
+    mimeType: string;
+    instruction?: string;
+  }) =>
+    requestJson<{
+      transcript: string;
+      model: string;
+      timestamp: string;
+    }>(
+      '/api/ai/transcribe',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      0,
+    ),
+
+  generateOrEditImage: (payload: {
+    prompt: string;
+    sourceImageBase64?: string;
+    sourceMimeType?: string;
+    aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4';
+    imageSize?: '1K' | '2K';
+  }) =>
+    requestJson<{
+      imageDataUrl: string;
+      mimeType: string;
+      caption: string;
+      model: string;
+      mode: 'create' | 'edit';
+      aspectRatio: string;
+      timestamp: string;
+    }>(
+      '/api/ai/image',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      0,
+    ),
+
+  generateOrAnimateVideo: (payload: {
+    prompt: string;
+    sourceImageBase64?: string;
+    sourceMimeType?: string;
+    aspectRatio: '16:9' | '9:16';
+    duration?: '5s' | '8s' | '10s';
+  }) =>
+    requestJson<{
+      videoDataUrl: string | null;
+      videoUri: string | null;
+      mimeType: string;
+      model: string;
+      mode: 'text' | 'animate';
+      aspectRatio: '16:9' | '9:16';
+      duration: string;
+      timestamp: string;
+    }>(
+      '/api/ai/video',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      0,
+    ),
 };
+
+export function buildSentinelWsUrl(path: string): string {
+  if (API_BASE_URL) {
+    const parsed = new URL(API_BASE_URL, window.location.origin);
+    const proto = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${parsed.host}${path}`;
+  }
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${window.location.host}${path}`;
+}
 
 export function useSentinelRealtime(portalRole: 'secops' | 'executive' | 'attacker' = 'secops') {
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null);

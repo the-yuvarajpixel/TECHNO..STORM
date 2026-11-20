@@ -88,7 +88,7 @@ export function FingerprintChart({ fingerprint }: FingerprintChartProps) {
                 textAnchor="end"
                 fill="var(--sentinel-ink-muted)"
                 fontSize="10"
-                fontFamily="IBM Plex Mono, monospace"
+                fontFamily="var(--font-mono)"
               >
                 {tick}
               </text>
@@ -144,7 +144,7 @@ export function FingerprintChart({ fingerprint }: FingerprintChartProps) {
                   fill="var(--sentinel-crit)"
                   fontSize="10"
                   fontWeight="700"
-                  fontFamily="IBM Plex Mono, monospace"
+                  fontFamily="var(--font-mono)"
                 >
                   {val}
                 </text>
@@ -161,7 +161,7 @@ export function FingerprintChart({ fingerprint }: FingerprintChartProps) {
             textAnchor="middle"
             fill="var(--sentinel-ink-muted)"
             fontSize="10"
-            fontFamily="IBM Plex Mono, monospace"
+            fontFamily="var(--font-mono)"
           >
             {String(hr).padStart(2, '0')}h
           </text>
