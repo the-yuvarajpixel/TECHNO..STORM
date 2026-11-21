@@ -59,7 +59,11 @@ import {
   BreachDrillDock,
   BreachDrillModal,
   DRILL_CADENCE_MS,
+  clearCompletedDrillHistory,
+  loadCompletedDrillHistory,
+  upsertCompletedDrillSession,
   type BreachDrillCadence,
+  type CompletedDrillSessionRecord,
 } from './components/BreachDrillPanel';
 import { severityLabel } from './lib/format';
 
@@ -177,6 +181,9 @@ export default function App() {
     error: string | null;
   } | null>(null);
   const [firingDrillStep, setFiringDrillStep] = useState<number | null>(null);
+  const [completedDrillHistory, setCompletedDrillHistory] = useState<CompletedDrillSessionRecord[]>(
+    loadCompletedDrillHistory,
+  );
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [demoActive, setDemoActive] = useState(false);
@@ -269,6 +276,65 @@ export default function App() {
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDrill, firingDrillStep]);
+
+  // Persist completed drill sessions (last 5) and keep active completed session's live response score synced
+  useEffect(() => {
+    if (!activeDrill || activeDrill.status !== 'completed') return;
+    const scenario = getBreachDrillScenario(activeDrill.scenarioId);
+    if (!scenario) return;
+
+    const drillAlertIds = activeDrill.results
+      .map((r) => r.alertId)
+      .filter((id): id is string => Boolean(id));
+    const drillAlerts = (snapshot?.alerts ?? []).filter((a) => drillAlertIds.includes(a.id));
+    const triagedCount = drillAlerts.filter(
+      (a) => a.feedbackHistory.length > 0 || a.status !== 'open',
+    ).length;
+    const containedCount = drillAlerts.filter(
+      (a) => a.activeResponse !== null || a.status === 'contained' || a.status === 'resolved',
+    ).length;
+    const resolvedCount = drillAlerts.filter((a) => a.status === 'resolved').length;
+
+    const totalStages = scenario.stages.length;
+    const completedStages = activeDrill.results.length;
+    const stageCompletionPct = Math.round((completedStages / Math.max(1, totalStages)) * 100);
+    const successRate =
+      drillAlerts.length === 0
+        ? stageCompletionPct
+        : Math.round(
+            ((triagedCount * 0.35 + containedCount * 0.35 + resolvedCount * 0.3) /
+              drillAlerts.length) *
+              100,
+          );
+
+    const startMs = Date.parse(activeDrill.startedAt);
+    const lastStageExecMs = activeDrill.results.reduce((latest, r) => {
+      const parsed = Date.parse(r.executedAt);
+      return Number.isNaN(parsed) ? latest : Math.max(latest, parsed);
+    }, Number.NaN);
+    const durationSec =
+      !Number.isNaN(startMs) && !Number.isNaN(lastStageExecMs) && lastStageExecMs >= startMs
+        ? Math.max(1, Math.round((lastStageExecMs - startMs) / 1000))
+        : scenario.estimatedDurationSec;
+
+    const record: CompletedDrillSessionRecord = {
+      drillId: activeDrill.drillId,
+      scenarioId: scenario.id,
+      scenarioName: scenario.name,
+      cadence: activeDrill.cadence,
+      completedAt: new Date().toISOString(),
+      durationSec,
+      completedStages,
+      totalStages,
+      alertsRaised: drillAlerts.length,
+      triagedCount,
+      containedCount,
+      resolvedCount,
+      successRate,
+    };
+
+    setCompletedDrillHistory((prev) => upsertCompletedDrillSession(prev, record));
+  }, [activeDrill, snapshot?.alerts]);
 
   const syncUrlPortal = (nextRoute: EntryRoute) => {
     try {
@@ -1252,6 +1318,7 @@ export default function App() {
                 if (!scenario) return null;
                 return (
                   <BreachDrillDock
+                    drillId={activeDrill.drillId}
                     scenario={scenario}
                     cadence={activeDrill.cadence}
                     status={activeDrill.status}
@@ -1261,6 +1328,8 @@ export default function App() {
                     results={activeDrill.results}
                     error={activeDrill.error}
                     snapshot={snapshot}
+                    completedSessions={completedDrillHistory}
+                    onClearHistory={() => setCompletedDrillHistory(clearCompletedDrillHistory())}
                     onTogglePause={() =>
                       setActiveDrill((prev) =>
                         prev
