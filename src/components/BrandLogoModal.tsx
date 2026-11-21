@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type DragEvent, type ChangeEvent } from 'react';
-import { Check, ImagePlus, RotateCcw, Shield, Upload, X } from 'lucide-react';
+import { Check, Download, ImagePlus, RotateCcw, Upload, X } from 'lucide-react';
+import defaultSentinelLogo from '../assets/images/sentinel_brand_logo_1795243928821.jpg';
 
+export const DEFAULT_SENTINEL_LOGO_URL = defaultSentinelLogo;
 export const BRAND_LOGO_STORAGE_KEY = 'sentinel-custom-brand-logo-v1';
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024; // 2 MB
 const MAX_RASTER_DIM = 512;
@@ -86,49 +88,31 @@ interface BrandMarkProps {
   showFallbackIcon?: boolean;
 }
 
-export function BrandMark({ logoUrl, size = 'md', showFallbackIcon = false }: BrandMarkProps) {
-  if (logoUrl) {
-    return (
-      <span className="inline-flex items-center gap-2 min-w-0">
-        <img
-          src={logoUrl}
-          alt="Sentinel custom brand logo"
-          data-testid="custom-brand-logo-img"
-          className={
-            size === 'sm'
-              ? 'h-6 max-w-[112px] w-auto object-contain rounded-xs shrink-0'
-              : 'h-7 max-w-[136px] w-auto object-contain rounded-xs shrink-0'
-          }
-        />
-        <span
-          className={
-            size === 'sm'
-              ? 'font-title text-sm font-semibold tracking-tight text-[var(--sentinel-ink)] whitespace-nowrap'
-              : 'font-title text-lg font-bold tracking-tight text-[var(--sentinel-ink)] whitespace-nowrap'
-          }
-        >
-          Sentinel
-        </span>
-      </span>
-    );
-  }
+export function BrandMark({ logoUrl, size = 'md' }: BrandMarkProps) {
+  const isCustom = Boolean(logoUrl);
+  const src = logoUrl || defaultSentinelLogo;
 
   return (
-    <span className="inline-flex items-center gap-2 whitespace-nowrap">
-      {showFallbackIcon && (
-        <Shield
-          className={
-            size === 'sm'
-              ? 'w-4 h-4 text-[var(--sentinel-accent)] shrink-0'
-              : 'w-5 h-5 text-[var(--sentinel-accent)] shrink-0'
-          }
-        />
-      )}
+    <span className="inline-flex items-center gap-2.5 min-w-0 whitespace-nowrap">
+      <img
+        src={src}
+        alt={isCustom ? 'Sentinel custom workspace logo' : 'Sentinel brand logo'}
+        data-testid={isCustom ? 'custom-brand-logo-img' : 'default-brand-logo-img'}
+        className={
+          isCustom
+            ? size === 'sm'
+              ? 'h-6 max-w-[112px] w-auto object-contain rounded-sm shrink-0'
+              : 'h-8 max-w-[140px] w-auto object-contain rounded-sm shrink-0'
+            : size === 'sm'
+              ? 'w-7 h-7 object-cover rounded-md border border-[var(--sentinel-border)] shrink-0 shadow-xs'
+              : 'w-8 h-8 object-cover rounded-md border border-[var(--sentinel-border)] shrink-0 shadow-xs'
+        }
+      />
       <span
         className={
           size === 'sm'
-            ? 'font-title text-sm font-semibold tracking-tight text-[var(--sentinel-ink)]'
-            : 'font-title text-xl font-bold tracking-tight text-[var(--sentinel-ink)]'
+            ? 'font-title text-base font-bold tracking-tight text-[var(--sentinel-ink)] whitespace-nowrap'
+            : 'font-title text-xl font-bold tracking-tight text-[var(--sentinel-ink)] whitespace-nowrap'
         }
       >
         Sentinel
@@ -311,21 +295,31 @@ export function BrandLogoModal({
 
           {/* Light & Dark Surface Preview */}
           <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--sentinel-ink-muted)]">
-              Header Preview
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--sentinel-ink-muted)]">
+                Header Preview
+              </p>
+              <a
+                href={draftLogoUrl || defaultSentinelLogo}
+                download={draftLogoUrl ? 'sentinel-custom-logo.png' : 'sentinel-official-logo.jpg'}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--sentinel-accent)] hover:underline"
+              >
+                <Download className="w-3 h-3" />
+                <span>Download Logo</span>
+              </a>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div className="rounded-md border border-[#E2E8F0] bg-[#FFFFFF] px-3.5 py-3 flex items-center justify-between">
-                <span className="inline-flex items-center gap-2">
-                  {draftLogoUrl ? (
-                    <img
-                      src={draftLogoUrl}
-                      alt="Light theme logo preview"
-                      className="h-7 max-w-[110px] w-auto object-contain"
-                    />
-                  ) : (
-                    <Shield className="w-5 h-5 text-[#1D4ED8]" />
-                  )}
+                <span className="inline-flex items-center gap-2.5">
+                  <img
+                    src={draftLogoUrl || defaultSentinelLogo}
+                    alt="Light theme logo preview"
+                    className={
+                      draftLogoUrl
+                        ? 'h-7 max-w-[110px] w-auto object-contain rounded-sm'
+                        : 'w-8 h-8 object-cover rounded-md border border-[#E2E8F0]'
+                    }
+                  />
                   <span className="font-title text-base font-bold tracking-tight text-[#0F172A]">
                     Sentinel
                   </span>
@@ -334,16 +328,16 @@ export function BrandLogoModal({
               </div>
 
               <div className="rounded-md border border-[#243247] bg-[#121A2B] px-3.5 py-3 flex items-center justify-between">
-                <span className="inline-flex items-center gap-2">
-                  {draftLogoUrl ? (
-                    <img
-                      src={draftLogoUrl}
-                      alt="Dark theme logo preview"
-                      className="h-7 max-w-[110px] w-auto object-contain"
-                    />
-                  ) : (
-                    <Shield className="w-5 h-5 text-[#3B82F6]" />
-                  )}
+                <span className="inline-flex items-center gap-2.5">
+                  <img
+                    src={draftLogoUrl || defaultSentinelLogo}
+                    alt="Dark theme logo preview"
+                    className={
+                      draftLogoUrl
+                        ? 'h-7 max-w-[110px] w-auto object-contain rounded-sm'
+                        : 'w-8 h-8 object-cover rounded-md border border-[#243247]'
+                    }
+                  />
                   <span className="font-title text-base font-bold tracking-tight text-[#F1F5F9]">
                     Sentinel
                   </span>
