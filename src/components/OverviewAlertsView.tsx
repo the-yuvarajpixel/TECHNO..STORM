@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Ban,
@@ -86,9 +86,11 @@ export function OverviewAlertsView({
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState<boolean>(readInitialAutoRefresh);
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState<number>(AUTO_REFRESH_INTERVAL_SEC);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [pollFailed, setPollFailed] = useState(false);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   const syncingRef = useRef(false);
   const remainingRef = useRef<number>(AUTO_REFRESH_INTERVAL_SEC);
+  const lastPollMsRef = useRef<number>(Date.now());
 
   // Persist user preference
   useEffect(() => {
@@ -116,21 +118,38 @@ export function OverviewAlertsView({
     };
   }, [settingsOpen]);
 
-  const runAlertPoll = async () => {
+  const runAlertPoll = useCallback(async () => {
     if (syncingRef.current) return;
     syncingRef.current = true;
     setIsSyncing(true);
     try {
-      await onRefreshAlerts({ emitNewToasts: true });
+      const ok = await onRefreshAlerts({ emitNewToasts: true });
+      setPollFailed(!ok);
+      lastPollMsRef.current = Date.now();
+    } catch {
+      setPollFailed(true);
     } finally {
       syncingRef.current = false;
       setIsSyncing(false);
       remainingRef.current = AUTO_REFRESH_INTERVAL_SEC;
       setSecondsUntilRefresh(AUTO_REFRESH_INTERVAL_SEC);
     }
+  }, [onRefreshAlerts]);
+
+  const handleToggleAutoRefresh = () => {
+    setAutoRefreshEnabled((prev) => {
+      const next = !prev;
+      if (next) {
+        // Trigger an immediate refresh when re-enabling auto-refresh
+        void runAlertPoll();
+      } else {
+        setPollFailed(false);
+      }
+      return next;
+    });
   };
 
-  // 30-second Auto-Refresh polling loop with 1s countdown & tab-visibility awareness
+  // 30-second Auto-Refresh polling loop with 1s countdown & tab-visibility catch-up
   useEffect(() => {
     if (!autoRefreshEnabled) {
       remainingRef.current = AUTO_REFRESH_INTERVAL_SEC;
@@ -156,9 +175,22 @@ export function OverviewAlertsView({
       }
     }, 1000);
 
-    return () => window.clearInterval(tick);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRefreshEnabled, onRefreshAlerts]);
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        !syncingRef.current &&
+        Date.now() - lastPollMsRef.current >= AUTO_REFRESH_INTERVAL_SEC * 1000
+      ) {
+        void runAlertPoll();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearInterval(tick);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [autoRefreshEnabled, runAlertPoll]);
 
   const availableIps = useMemo(() => {
     const set = new Set<string>();
@@ -275,14 +307,12 @@ export function OverviewAlertsView({
               >
                 <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
                 <span>View Settings</span>
-                {autoRefreshEnabled && (
-                  <span
-                    className="font-mono text-[11px] tabular-nums opacity-85"
-                    data-testid="auto-refresh-countdown"
-                  >
-                    · {isSyncing ? 'Syncing…' : `${secondsUntilRefresh}s`}
-                  </span>
-                )}
+                <span
+                  className="font-mono text-[11px] tabular-nums opacity-85"
+                  data-testid="auto-refresh-countdown"
+                >
+                  · {autoRefreshEnabled ? (isSyncing ? 'Syncing…' : `${secondsUntilRefresh}s`) : 'Off'}
+                </span>
               </button>
 
               {settingsOpen && (
@@ -309,9 +339,20 @@ export function OverviewAlertsView({
                   {/* 30-Second Auto-Refresh Toggle */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-0.5">
-                      <p className="text-xs font-semibold text-[var(--sentinel-ink)]">
-                        Auto-Refresh (30s)
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-semibold text-[var(--sentinel-ink)]">
+                          Auto-Refresh (30s)
+                        </p>
+                        <span
+                          className={`font-mono text-[10px] font-bold uppercase tracking-wider ${
+                            autoRefreshEnabled
+                              ? 'text-[var(--sentinel-accent)]'
+                              : 'text-[var(--sentinel-ink-muted)]'
+                          }`}
+                        >
+                          · {autoRefreshEnabled ? 'On' : 'Off'}
+                        </span>
+                      </div>
                       <p className="text-[11px] text-[var(--sentinel-ink-secondary)] leading-snug">
                         Polls the Sentinel API for new alerts every 30 seconds while this view is open.
                       </p>
@@ -322,7 +363,7 @@ export function OverviewAlertsView({
                       aria-checked={autoRefreshEnabled}
                       aria-label="Toggle 30-second auto-refresh"
                       data-testid="auto-refresh-toggle"
-                      onClick={() => setAutoRefreshEnabled((v) => !v)}
+                      onClick={handleToggleAutoRefresh}
                       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-md border transition-colors cursor-pointer ${
                         autoRefreshEnabled
                           ? 'bg-[var(--sentinel-accent)] border-[var(--sentinel-accent)]'
@@ -336,6 +377,15 @@ export function OverviewAlertsView({
                       />
                     </button>
                   </div>
+
+                  {pollFailed && (
+                    <div
+                      role="status"
+                      className="px-2.5 py-1.5 rounded-md alert-pop-critical text-[11px] font-medium text-[var(--sentinel-crit-ink)]"
+                    >
+                      Last poll could not reach Sentinel API. Will retry automatically or use Sync Now.
+                    </div>
+                  )}
 
                   {/* Sync Status & Manual Refresh Action */}
                   <div className="pt-2.5 border-t border-[var(--sentinel-divider)] flex items-center justify-between gap-2">

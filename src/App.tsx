@@ -8,6 +8,7 @@ import {
   FileCheck2,
   Globe,
   Home,
+  ImagePlus,
   Layers,
   LogOut,
   Menu,
@@ -65,6 +66,12 @@ import {
   type BreachDrillCadence,
   type CompletedDrillSessionRecord,
 } from './components/BreachDrillPanel';
+import {
+  BrandLogoModal,
+  BrandMark,
+  loadCustomBrandLogo,
+  saveCustomBrandLogo,
+} from './components/BrandLogoModal';
 import { severityLabel } from './lib/format';
 
 type ThemeMode = 'light' | 'dark';
@@ -184,6 +191,8 @@ export default function App() {
   const [completedDrillHistory, setCompletedDrillHistory] = useState<CompletedDrillSessionRecord[]>(
     loadCompletedDrillHistory,
   );
+  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(loadCustomBrandLogo);
+  const [logoModalOpen, setLogoModalOpen] = useState(false);
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [demoActive, setDemoActive] = useState(false);
@@ -782,38 +791,15 @@ export default function App() {
     setActiveView('overview');
   };
 
+  const handleSaveCustomLogo = (nextLogoUrl: string | null) => {
+    setCustomLogoUrl(nextLogoUrl);
+    saveCustomBrandLogo(nextLogoUrl);
+  };
+
   // Public Landing Page — always accessible for portal selection without forcing immediate popup
   if (entryRoute === 'landing') {
     return (
-      <StartLoginView
-        copy={copy}
-        lang={lang}
-        onChangeLang={handleChangeLang}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-        region={snapshot?.controlPlane?.region}
-        authenticatedEmail={user?.email ?? null}
-        authBusy={authBusy}
-        authError={authError}
-        initialPortalChoice={portal}
-        onClearAuthError={clearAuthError}
-        onCancelAuth={cancelAuth}
-        onSelectPortal={handleSelectPortalFromLanding}
-        onSignOut={handleSignOut}
-        connectedAttackers={connectedAttackers}
-      />
-    );
-  }
-
-  const operatorDisplayName =
-    operatorProfile?.displayName || user?.displayName || user?.email?.split('@')[0] || 'Admin';
-  const portalLabel = activeNav.breadcrumb;
-
-  // Protected Entry Point: enforces Firebase Authentication before rendering Admin OR Demo Attacker portals
-  return (
-    <ProtectedPortalWrapper
-      requestedPortal={portal}
-      fallback={({ requestedPortal, authRequiredNotice }) => (
+      <>
         <StartLoginView
           copy={copy}
           lang={lang}
@@ -824,16 +810,57 @@ export default function App() {
           authenticatedEmail={user?.email ?? null}
           authBusy={authBusy}
           authError={authError}
-          authRequiredNotice={authRequiredNotice}
-          initialPortalChoice={requestedPortal}
+          initialPortalChoice={portal}
           onClearAuthError={clearAuthError}
           onCancelAuth={cancelAuth}
           onSelectPortal={handleSelectPortalFromLanding}
           onSignOut={handleSignOut}
           connectedAttackers={connectedAttackers}
+          customLogoUrl={customLogoUrl}
+          onOpenLogoUpload={() => setLogoModalOpen(true)}
         />
-      )}
-    >
+        <BrandLogoModal
+          open={logoModalOpen}
+          currentLogoUrl={customLogoUrl}
+          onClose={() => setLogoModalOpen(false)}
+          onSaveLogo={handleSaveCustomLogo}
+        />
+      </>
+    );
+  }
+
+  const operatorDisplayName =
+    operatorProfile?.displayName || user?.displayName || user?.email?.split('@')[0] || 'Admin';
+  const portalLabel = activeNav.breadcrumb;
+
+  // Protected Entry Point: enforces Firebase Authentication before rendering Admin OR Demo Attacker portals
+  return (
+    <>
+      <ProtectedPortalWrapper
+        requestedPortal={portal}
+        fallback={({ requestedPortal, authRequiredNotice }) => (
+          <StartLoginView
+            copy={copy}
+            lang={lang}
+            onChangeLang={handleChangeLang}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+            region={snapshot?.controlPlane?.region}
+            authenticatedEmail={user?.email ?? null}
+            authBusy={authBusy}
+            authError={authError}
+            authRequiredNotice={authRequiredNotice}
+            initialPortalChoice={requestedPortal}
+            onClearAuthError={clearAuthError}
+            onCancelAuth={cancelAuth}
+            onSelectPortal={handleSelectPortalFromLanding}
+            onSignOut={handleSignOut}
+            connectedAttackers={connectedAttackers}
+            customLogoUrl={customLogoUrl}
+            onOpenLogoUpload={() => setLogoModalOpen(true)}
+          />
+        )}
+      >
       {portal === 'attacker' ? (
         loading ? (
           <div className="min-h-screen bg-[#150E0B] text-[#FAF1E8] flex items-center justify-center p-6">
@@ -881,18 +908,26 @@ export default function App() {
         <div className="min-h-screen flex bg-[var(--sentinel-bg)] text-[var(--sentinel-ink)]">
           {/* Desktop Sidebar — Unified Admin Management Portal */}
           <aside className="hidden lg:flex lg:flex-col w-64 shrink-0 bg-[var(--sentinel-suede)] border-r border-[var(--sentinel-border)]">
-            <div className="h-14 px-5 flex items-center justify-between border-b border-[var(--sentinel-border-soft)]">
+            <div className="h-14 px-4 flex items-center justify-between gap-2 border-b border-[var(--sentinel-border-soft)]">
               <button
                 type="button"
                 onClick={openLandingPage}
-                className="font-title text-xl font-semibold tracking-tight text-[var(--sentinel-ink)] whitespace-nowrap hover:text-[var(--sentinel-accent)] transition-colors cursor-pointer"
+                className="min-w-0 inline-flex items-center hover:opacity-85 transition-opacity cursor-pointer"
                 title="Return to Portal Selection"
               >
-                Sentinel
+                <BrandMark logoUrl={customLogoUrl} size="sm" />
               </button>
-              <span className="text-[11px] font-mono text-[var(--sentinel-ink-muted)]">
-                {snapshot?.controlPlane?.region ?? 'ap-southeast-2'}
-              </span>
+              <button
+                type="button"
+                onClick={() => setLogoModalOpen(true)}
+                data-testid="upload-logo-sidebar-btn"
+                title={customLogoUrl ? 'Change workspace logo' : 'Upload workspace logo'}
+                aria-label={customLogoUrl ? 'Change workspace logo' : 'Upload workspace logo'}
+                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-md border border-[var(--sentinel-border)] bg-[var(--sentinel-nude)] text-[var(--sentinel-ink-secondary)] hover:text-[var(--sentinel-ink)] hover:border-[var(--sentinel-accent)] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <ImagePlus className="w-3.5 h-3.5 text-[var(--sentinel-accent)] shrink-0" />
+                <span>Logo</span>
+              </button>
             </div>
 
             {/* 2-Portal Switcher: Unified Admin Portal / Demo Attacker */}
@@ -1015,16 +1050,29 @@ export default function App() {
           {mobileMenuOpen && (
             <div className="fixed inset-0 z-50 lg:hidden flex bg-black/50">
               <aside className="w-64 bg-[var(--sentinel-suede)] h-full border-r border-[var(--sentinel-border)] flex flex-col">
-                <div className="h-14 px-4 flex items-center justify-between border-b border-[var(--sentinel-border-soft)] bg-[var(--sentinel-nude)]">
-                  <span className="font-title text-xl font-semibold tracking-tight text-[var(--sentinel-ink)]">Sentinel</span>
-                  <button
-                    type="button"
-                    onClick={() => setMobileMenuOpen(false)}
-                    aria-label="Close navigation menu"
-                    className="p-2 text-[var(--sentinel-ink-secondary)] hover:text-[var(--sentinel-ink)] cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                <div className="h-14 px-4 flex items-center justify-between gap-2 border-b border-[var(--sentinel-border-soft)] bg-[var(--sentinel-nude)]">
+                  <BrandMark logoUrl={customLogoUrl} size="sm" />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        setLogoModalOpen(true);
+                      }}
+                      aria-label="Upload workspace logo"
+                      className="p-2 rounded-md text-[var(--sentinel-accent)] hover:bg-[var(--sentinel-hover)] cursor-pointer"
+                    >
+                      <ImagePlus className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMobileMenuOpen(false)}
+                      aria-label="Close navigation menu"
+                      className="p-2 text-[var(--sentinel-ink-secondary)] hover:text-[var(--sentinel-ink)] cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="p-3 border-b border-[var(--sentinel-border-soft)] bg-[var(--sentinel-nude)]/60 space-y-2">
@@ -1576,6 +1624,13 @@ export default function App() {
           />
         </div>
       )}
-    </ProtectedPortalWrapper>
+      </ProtectedPortalWrapper>
+      <BrandLogoModal
+        open={logoModalOpen}
+        currentLogoUrl={customLogoUrl}
+        onClose={() => setLogoModalOpen(false)}
+        onSaveLogo={handleSaveCustomLogo}
+      />
+    </>
   );
 }

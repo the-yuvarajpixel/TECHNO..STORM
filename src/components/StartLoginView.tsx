@@ -9,6 +9,7 @@ import {
   Crosshair,
   Film,
   Globe,
+  ImagePlus,
   KeyRound,
   Lock,
   LogOut,
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react';
 import { LANGUAGE_OPTIONS, type LanguageCode, type UiCopy } from '../lib/i18n';
 import type { ProtectedPortalKind } from './ProtectedPortalWrapper';
+import { BrandMark } from './BrandLogoModal';
 import heroCommandImg from '../assets/images/hero_sentinel_command_1795174105039.jpg';
 import edgeVaultImg from '../assets/images/sentinel_edge_vault_1795174095830.jpg';
 import multimodalOpsImg from '../assets/images/sentinel_multimodal_ops_1795174098767.jpg';
@@ -47,6 +49,8 @@ interface StartLoginViewProps {
   onSelectPortal: (targetPortal: ProtectedPortalKind) => Promise<void>;
   onSignOut: () => Promise<void>;
   connectedAttackers: number;
+  customLogoUrl: string | null;
+  onOpenLogoUpload: () => void;
 }
 
 export function StartLoginView({
@@ -66,6 +70,8 @@ export function StartLoginView({
   onSelectPortal,
   onSignOut,
   connectedAttackers,
+  customLogoUrl,
+  onOpenLogoUpload,
 }: StartLoginViewProps) {
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -90,12 +96,12 @@ export function StartLoginView({
     <div className="min-h-screen flex flex-col bg-[var(--sentinel-bg)] text-[var(--sentinel-ink)]">
       {/* Strict 3-Zone Top Bar Contract */}
       <header className="sticky top-0 z-30 h-16 bg-[var(--sentinel-suede)]/95 backdrop-blur border-b border-[var(--sentinel-border)] px-6 lg:px-10 flex items-center justify-between gap-8 shrink-0">
-        {/* Zone 1: Clean single-element wordmark */}
+        {/* Zone 1: Clean single-element brand mark */}
         <a
           href="#top"
-          className="font-title text-xl font-bold tracking-tight text-[var(--sentinel-ink)] whitespace-nowrap shrink-0"
+          className="inline-flex items-center whitespace-nowrap shrink-0"
         >
-          Sentinel
+          <BrandMark logoUrl={customLogoUrl} />
         </a>
 
         {/* Zone 2: Concise single-line navigation links */}
@@ -663,13 +669,21 @@ export function StartLoginView({
       <footer className="border-t border-[var(--sentinel-border)] bg-[var(--sentinel-nude)] px-6 lg:px-10 py-6">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-[var(--sentinel-ink-muted)]">
           <div className="flex items-center gap-2.5">
-            <Shield className="w-4 h-4 text-[var(--sentinel-accent)]" />
-            <span className="font-title font-semibold text-[var(--sentinel-ink)]">Sentinel</span>
+            <BrandMark logoUrl={customLogoUrl} size="sm" showFallbackIcon />
             <span aria-hidden="true">·</span>
             <span>Harbor &amp; Finch LLP · {region}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onOpenLogoUpload}
+              data-testid="upload-logo-footer-btn"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-md border border-[var(--sentinel-border)] bg-[var(--sentinel-suede)] text-[var(--sentinel-ink)] hover:border-[var(--sentinel-accent)] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <ImagePlus className="w-3.5 h-3.5 text-[var(--sentinel-accent)]" />
+              <span>{customLogoUrl ? 'Change Logo' : 'Upload Logo'}</span>
+            </button>
             <label
               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-md border border-[var(--sentinel-border)] bg-[var(--sentinel-suede)] text-[var(--sentinel-ink)]"
               aria-label="Select language"
