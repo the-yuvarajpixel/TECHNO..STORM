@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Accessibility,
   Activity,
   ArrowRight,
   AudioLines,
@@ -9,7 +10,6 @@ import {
   Crosshair,
   Film,
   Globe,
-  ImagePlus,
   KeyRound,
   Lock,
   LogOut,
@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import { LANGUAGE_OPTIONS, type LanguageCode, type UiCopy } from '../lib/i18n';
 import type { ProtectedPortalKind } from './ProtectedPortalWrapper';
-import { BrandMark } from './BrandLogoModal';
+import { BrandMark } from './BrandMark';
+import { OfflineIndicator, PWAInstallButton } from './PWAInstallButton';
 import heroCommandImg from '../assets/images/hero_sentinel_command_1795174105039.jpg';
 import edgeVaultImg from '../assets/images/sentinel_edge_vault_1795174095830.jpg';
 import multimodalOpsImg from '../assets/images/sentinel_multimodal_ops_1795174098767.jpg';
@@ -49,8 +50,7 @@ interface StartLoginViewProps {
   onSelectPortal: (targetPortal: ProtectedPortalKind) => Promise<void>;
   onSignOut: () => Promise<void>;
   connectedAttackers: number;
-  customLogoUrl: string | null;
-  onOpenLogoUpload: () => void;
+  onOpenAccessibility: () => void;
 }
 
 export function StartLoginView({
@@ -70,8 +70,7 @@ export function StartLoginView({
   onSelectPortal,
   onSignOut,
   connectedAttackers,
-  customLogoUrl,
-  onOpenLogoUpload,
+  onOpenAccessibility,
 }: StartLoginViewProps) {
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -93,7 +92,11 @@ export function StartLoginView({
   const isSignedIn = Boolean(authenticatedEmail);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--sentinel-bg)] text-[var(--sentinel-ink)]">
+    <div id="top" className="min-h-screen flex flex-col bg-[var(--sentinel-bg)] text-[var(--sentinel-ink)]">
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+
       {/* Strict 3-Zone Top Bar Contract */}
       <header className="sticky top-0 z-30 h-16 bg-[var(--sentinel-suede)]/95 backdrop-blur border-b border-[var(--sentinel-border)] px-6 lg:px-10 flex items-center justify-between gap-8 shrink-0">
         {/* Zone 1: Clean single-element brand mark */}
@@ -101,7 +104,7 @@ export function StartLoginView({
           href="#top"
           className="inline-flex items-center whitespace-nowrap shrink-0"
         >
-          <BrandMark logoUrl={customLogoUrl} />
+          <BrandMark />
         </a>
 
         {/* Zone 2: Concise single-line navigation links */}
@@ -148,7 +151,7 @@ export function StartLoginView({
         </div>
       </header>
 
-      <main id="top" className="flex-1 w-full">
+      <main id="main-content" tabIndex={-1} className="flex-1 w-full focus:outline-none">
         {/* Auth Notices (if redirected or error occurred) */}
         {(authRequiredNotice || authError) && (
           <div className="max-w-7xl mx-auto px-6 lg:px-10 pt-6 space-y-3">
@@ -669,20 +672,21 @@ export function StartLoginView({
       <footer className="border-t border-[var(--sentinel-border)] bg-[var(--sentinel-nude)] px-6 lg:px-10 py-6">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-[var(--sentinel-ink-muted)]">
           <div className="flex items-center gap-2.5">
-            <BrandMark logoUrl={customLogoUrl} size="sm" showFallbackIcon />
+            <BrandMark size="sm" />
             <span aria-hidden="true">·</span>
             <span>Harbor &amp; Finch LLP · {region}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <PWAInstallButton variant="footer" />
             <button
               type="button"
-              onClick={onOpenLogoUpload}
-              data-testid="upload-logo-footer-btn"
+              onClick={onOpenAccessibility}
+              data-testid="start-a11y-btn"
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-md border border-[var(--sentinel-border)] bg-[var(--sentinel-suede)] text-[var(--sentinel-ink)] hover:border-[var(--sentinel-accent)] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <ImagePlus className="w-3.5 h-3.5 text-[var(--sentinel-accent)]" />
-              <span>{customLogoUrl ? 'Change Logo' : 'Upload Logo'}</span>
+              <Accessibility className="w-3.5 h-3.5 text-[var(--sentinel-accent)]" />
+              <span>Accessibility</span>
             </button>
             <label
               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-md border border-[var(--sentinel-border)] bg-[var(--sentinel-suede)] text-[var(--sentinel-ink)]"
@@ -737,6 +741,7 @@ export function StartLoginView({
           </div>
         </div>
       </footer>
+      <OfflineIndicator />
     </div>
   );
 }

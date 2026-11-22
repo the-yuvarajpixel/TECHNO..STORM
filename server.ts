@@ -44,7 +44,7 @@ async function startServer() {
   const liveWss = new WebSocketServer({ noServer: true });
   wssRef = notificationsWss;
 
-  // Route WebSocket upgrade requests cleanly to /ws/notifications or /ws/live
+  // Route WebSocket upgrade requests cleanly to /ws/notifications, /ws/live, or Vite dev /__vite_ws
   server.on('upgrade', (request, socket, head) => {
     const pathname = new URL(request.url ?? '/', `http://${request.headers.host || 'localhost'}`).pathname;
     if (pathname === '/ws/notifications') {
@@ -55,6 +55,9 @@ async function startServer() {
       liveWss.handleUpgrade(request, socket, head, (ws) => {
         liveWss.emit('connection', ws, request);
       });
+    } else if (pathname === '/__vite_ws') {
+      // Handled by Vite's attached middleware WebSocket server
+      return;
     } else {
       socket.destroy();
     }
@@ -233,7 +236,15 @@ async function startServer() {
   if (!IS_PROD) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        ws: {
+          server,
+          path: '/__vite_ws',
+        },
+        allowedHosts: true,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

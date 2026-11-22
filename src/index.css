@@ -137,6 +137,76 @@
   color: var(--sentinel-high-ink);
 }
 
+/* High-Contrast Accessibility Overrides (WCAG AAA Contrast) */
+html.high-contrast {
+  --sentinel-bg: #FFFFFF;
+  --sentinel-suede: #FFFFFF;
+  --sentinel-nude: #F1F5F9;
+  --sentinel-inset: #F8FAFC;
+  --sentinel-border: #334155;
+  --sentinel-border-soft: #475569;
+  --sentinel-border-nude: #334155;
+  --sentinel-divider: #475569;
+  --sentinel-ink: #020617;
+  --sentinel-ink-secondary: #0F172A;
+  --sentinel-ink-muted: #334155;
+  --sentinel-accent: #1E40AF;
+  --sentinel-accent-hover: #172554;
+}
+
+html.dark.high-contrast {
+  --sentinel-bg: #020617;
+  --sentinel-suede: #0A1020;
+  --sentinel-nude: #111A30;
+  --sentinel-inset: #070C18;
+  --sentinel-border: #94A3B8;
+  --sentinel-border-soft: #64748B;
+  --sentinel-border-nude: #94A3B8;
+  --sentinel-divider: #64748B;
+  --sentinel-ink: #FFFFFF;
+  --sentinel-ink-secondary: #F1F5F9;
+  --sentinel-ink-muted: #CBD5E1;
+  --sentinel-accent: #60A5FA;
+  --sentinel-accent-hover: #93C5FD;
+}
+
+html[data-text-scale="lg"] {
+  font-size: 112.5%;
+}
+
+html[data-text-scale="xl"] {
+  font-size: 125%;
+}
+
+/* Keyboard Skip-to-Content Link */
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 1rem;
+  z-index: 100;
+  padding: 0.625rem 1rem;
+  border-radius: 0.375rem;
+  background-color: var(--sentinel-accent);
+  color: #FFFFFF;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  transition: top 120ms ease;
+}
+
+.skip-link:focus {
+  top: 0.75rem;
+  outline: 3px solid #FFFFFF;
+  outline-offset: 2px;
+}
+
+/* Clear Keyboard Focus Visibility across all interactive controls */
+:where(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+  outline: 2.5px solid var(--sentinel-accent);
+  outline-offset: 2px;
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
@@ -146,5 +216,15 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
+}
+
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }

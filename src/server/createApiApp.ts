@@ -42,9 +42,12 @@ export function createSentinelApiApp(options?: CreateSentinelApiOptions): {
   const app = express();
   app.use(express.json({ limit: '25mb' }));
 
-  // Ensure Firebase popup auth works cleanly across browsers, Netlify, and reverse proxies
+  // Baseline security & popup-auth compatibility headers (iframe-safe)
   app.use((_req, res, next) => {
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'microphone=(self), geolocation=(self)');
     next();
   });
 

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import {
+  Accessibility,
   Activity,
   Bell,
   Building2,
@@ -8,7 +9,6 @@ import {
   FileCheck2,
   Globe,
   Home,
-  ImagePlus,
   Layers,
   LogOut,
   Menu,
@@ -39,15 +39,6 @@ import {
 } from './components/ProtectedPortalWrapper';
 import { StartLoginView } from './components/StartLoginView';
 import { OverviewAlertsView } from './components/OverviewAlertsView';
-import { FingerprintsView } from './components/FingerprintsView';
-import { HoneyTrapsView } from './components/HoneyTrapsView';
-import { DriftToolkitView } from './components/DriftToolkitView';
-import { VaultIngestView } from './components/VaultIngestView';
-import { WebhooksNotificationsView } from './components/WebhooksNotificationsView';
-import { ArchitectureIntegrationView } from './components/ArchitectureIntegrationView';
-import { AiStudioView } from './components/AiStudioView';
-import { ExecutivePortalView } from './components/ExecutivePortalView';
-import { AttackerPortalView } from './components/AttackerPortalView';
 import { PhoneAttackerModal } from './components/PhoneAttackerModal';
 import {
   DemoPresenterDock,
@@ -66,13 +57,49 @@ import {
   type BreachDrillCadence,
   type CompletedDrillSessionRecord,
 } from './components/BreachDrillPanel';
+import { BrandMark } from './components/BrandMark';
 import {
-  BrandLogoModal,
-  BrandMark,
-  loadCustomBrandLogo,
-  saveCustomBrandLogo,
-} from './components/BrandLogoModal';
+  AccessibilityModal,
+  applyAccessibilityPrefs,
+  loadAccessibilityPrefs,
+  type AccessibilityPrefs,
+} from './components/AccessibilityModal';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { OfflineIndicator, PWAInstallButton } from './components/PWAInstallButton';
 import { severityLabel } from './lib/format';
+
+// Route-level code splitting for faster mobile/PWA startup
+const FingerprintsView = lazy(() =>
+  import('./components/FingerprintsView').then((m) => ({ default: m.FingerprintsView })),
+);
+const HoneyTrapsView = lazy(() =>
+  import('./components/HoneyTrapsView').then((m) => ({ default: m.HoneyTrapsView })),
+);
+const DriftToolkitView = lazy(() =>
+  import('./components/DriftToolkitView').then((m) => ({ default: m.DriftToolkitView })),
+);
+const VaultIngestView = lazy(() =>
+  import('./components/VaultIngestView').then((m) => ({ default: m.VaultIngestView })),
+);
+const WebhooksNotificationsView = lazy(() =>
+  import('./components/WebhooksNotificationsView').then((m) => ({
+    default: m.WebhooksNotificationsView,
+  })),
+);
+const ArchitectureIntegrationView = lazy(() =>
+  import('./components/ArchitectureIntegrationView').then((m) => ({
+    default: m.ArchitectureIntegrationView,
+  })),
+);
+const AiStudioView = lazy(() =>
+  import('./components/AiStudioView').then((m) => ({ default: m.AiStudioView })),
+);
+const ExecutivePortalView = lazy(() =>
+  import('./components/ExecutivePortalView').then((m) => ({ default: m.ExecutivePortalView })),
+);
+const AttackerPortalView = lazy(() =>
+  import('./components/AttackerPortalView').then((m) => ({ default: m.AttackerPortalView })),
+);
 
 type ThemeMode = 'light' | 'dark';
 type EntryRoute = 'landing' | ProtectedPortalKind;
@@ -191,8 +218,8 @@ export default function App() {
   const [completedDrillHistory, setCompletedDrillHistory] = useState<CompletedDrillSessionRecord[]>(
     loadCompletedDrillHistory,
   );
-  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(loadCustomBrandLogo);
-  const [logoModalOpen, setLogoModalOpen] = useState(false);
+  const [a11yPrefs, setA11yPrefs] = useState<AccessibilityPrefs>(loadAccessibilityPrefs);
+  const [a11yModalOpen, setA11yModalOpen] = useState(false);
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [demoActive, setDemoActive] = useState(false);
@@ -224,6 +251,11 @@ export default function App() {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     window.localStorage.setItem('sentinel-theme', theme);
   }, [theme]);
+
+  // Apply WCAG accessibility preferences (High Contrast, Text Scale, Reduce Motion)
+  useEffect(() => {
+    applyAccessibilityPrefs(a11yPrefs);
+  }, [a11yPrefs]);
 
   // Persist selected language
   useEffect(() => {
@@ -791,11 +823,6 @@ export default function App() {
     setActiveView('overview');
   };
 
-  const handleSaveCustomLogo = (nextLogoUrl: string | null) => {
-    setCustomLogoUrl(nextLogoUrl);
-    saveCustomBrandLogo(nextLogoUrl);
-  };
-
   // Public Landing Page — always accessible for portal selection without forcing immediate popup
   if (entryRoute === 'landing') {
     return (
@@ -816,14 +843,13 @@ export default function App() {
           onSelectPortal={handleSelectPortalFromLanding}
           onSignOut={handleSignOut}
           connectedAttackers={connectedAttackers}
-          customLogoUrl={customLogoUrl}
-          onOpenLogoUpload={() => setLogoModalOpen(true)}
+          onOpenAccessibility={() => setA11yModalOpen(true)}
         />
-        <BrandLogoModal
-          open={logoModalOpen}
-          currentLogoUrl={customLogoUrl}
-          onClose={() => setLogoModalOpen(false)}
-          onSaveLogo={handleSaveCustomLogo}
+        <AccessibilityModal
+          open={a11yModalOpen}
+          prefs={a11yPrefs}
+          onChange={setA11yPrefs}
+          onClose={() => setA11yModalOpen(false)}
         />
       </>
     );
@@ -832,6 +858,18 @@ export default function App() {
   const operatorDisplayName =
     operatorProfile?.displayName || user?.displayName || user?.email?.split('@')[0] || 'Admin';
   const portalLabel = activeNav.breadcrumb;
+
+  const lazyViewFallback = (
+    <div
+      role="status"
+      aria-live="polite"
+      className="window-suede rounded-lg p-8 space-y-4"
+    >
+      <div className="h-5 w-56 bg-[var(--sentinel-inset)] rounded animate-pulse" />
+      <div className="h-4 w-full max-w-lg bg-[var(--sentinel-nude)] rounded animate-pulse" />
+      <span className="sr-only">Loading view...</span>
+    </div>
+  );
 
   // Protected Entry Point: enforces Firebase Authentication before rendering Admin OR Demo Attacker portals
   return (
@@ -856,8 +894,7 @@ export default function App() {
             onSelectPortal={handleSelectPortalFromLanding}
             onSignOut={handleSignOut}
             connectedAttackers={connectedAttackers}
-            customLogoUrl={customLogoUrl}
-            onOpenLogoUpload={() => setLogoModalOpen(true)}
+            onOpenAccessibility={() => setA11yModalOpen(true)}
           />
         )}
       >
@@ -896,16 +933,26 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <AttackerPortalView
-            snapshot={snapshot}
-            wsStatus={wsStatus}
-            onExecuteAction={handleAttackerAction}
-            onExitToAdmin={() => navigateToPortal('admin')}
-            busyAction={busyAction}
-          />
+          <AppErrorBoundary sectionLabel="Demo Attacker Portal">
+            <Suspense fallback={lazyViewFallback}>
+              <AttackerPortalView
+                snapshot={snapshot}
+                wsStatus={wsStatus}
+                onExecuteAction={handleAttackerAction}
+                onExitToAdmin={() => navigateToPortal('admin')}
+                busyAction={busyAction}
+              />
+            </Suspense>
+          </AppErrorBoundary>
         )
       ) : (
         <div className="min-h-screen flex bg-[var(--sentinel-bg)] text-[var(--sentinel-ink)]">
+          <a href="#main-content" className="skip-link">
+            Skip to main content
+          </a>
+          <div className="sr-only" aria-live="polite" role="status">
+            Active section: {portalLabel}
+          </div>
           {/* Desktop Sidebar — Unified Admin Management Portal */}
           <aside className="hidden lg:flex lg:flex-col w-64 shrink-0 bg-[var(--sentinel-suede)] border-r border-[var(--sentinel-border)]">
             <div className="h-14 px-4 flex items-center justify-between gap-2 border-b border-[var(--sentinel-border-soft)]">
@@ -915,19 +962,11 @@ export default function App() {
                 className="min-w-0 inline-flex items-center hover:opacity-85 transition-opacity cursor-pointer"
                 title="Return to Portal Selection"
               >
-                <BrandMark logoUrl={customLogoUrl} size="sm" />
+                <BrandMark size="sm" />
               </button>
-              <button
-                type="button"
-                onClick={() => setLogoModalOpen(true)}
-                data-testid="upload-logo-sidebar-btn"
-                title={customLogoUrl ? 'Change workspace logo' : 'Upload workspace logo'}
-                aria-label={customLogoUrl ? 'Change workspace logo' : 'Upload workspace logo'}
-                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-md border border-[var(--sentinel-border)] bg-[var(--sentinel-nude)] text-[var(--sentinel-ink-secondary)] hover:text-[var(--sentinel-ink)] hover:border-[var(--sentinel-accent)] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <ImagePlus className="w-3.5 h-3.5 text-[var(--sentinel-accent)] shrink-0" />
-                <span>Logo</span>
-              </button>
+              <span className="text-[11px] font-mono text-[var(--sentinel-ink-muted)] truncate">
+                {snapshot?.controlPlane?.region ?? 'ap-southeast-2'}
+              </span>
             </div>
 
             {/* 2-Portal Switcher: Unified Admin Portal / Demo Attacker */}
@@ -985,6 +1024,7 @@ export default function App() {
                   <button
                     key={item.id}
                     type="button"
+                    aria-current={active ? 'page' : undefined}
                     onClick={() => setActiveView(item.id)}
                     className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-md transition-colors whitespace-nowrap cursor-pointer ${
                       active
@@ -992,15 +1032,16 @@ export default function App() {
                         : 'text-[var(--sentinel-ink-secondary)] hover:bg-[var(--sentinel-nude)]/80 hover:text-[var(--sentinel-ink)] font-medium'
                     }`}
                   >
-                    <Icon className="w-4 h-4 shrink-0" />
+                    <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
                     <span className="truncate">{item.label}</span>
                   </button>
                 );
               })}
             </nav>
 
-            {/* Authenticated Firebase Account, Portal Hub & Sign-Out */}
+            {/* Authenticated Firebase Account, PWA Install, Portal Hub & Sign-Out */}
             <div className="p-4 border-t border-[var(--sentinel-border-soft)] text-xs space-y-2.5 text-[var(--sentinel-ink-secondary)]">
+              <PWAInstallButton variant="sidebar" />
               <div className="space-y-0.5 min-w-0">
                 <p className="font-semibold text-[var(--sentinel-ink)] truncate">
                   {operatorDisplayName}
@@ -1029,7 +1070,7 @@ export default function App() {
                   onClick={openLandingPage}
                   className="flex items-center justify-center gap-1 px-2 py-1.5 text-[11px] font-semibold rounded-md border border-[var(--sentinel-border)] bg-[var(--sentinel-suede)] text-[var(--sentinel-ink)] hover:border-[var(--sentinel-accent)] transition-colors cursor-pointer"
                 >
-                  <Home className="w-3.5 h-3.5 shrink-0" />
+                  <Home className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   <span>Landing</span>
                 </button>
                 <button
@@ -1039,7 +1080,7 @@ export default function App() {
                   data-testid="admin-signout-btn"
                   className="flex items-center justify-center gap-1 px-2 py-1.5 text-[11px] font-semibold rounded-md border border-[var(--sentinel-border)] bg-[var(--sentinel-nude)] text-[var(--sentinel-ink)] hover:border-[var(--sentinel-crit)] hover:text-[var(--sentinel-crit)] transition-colors cursor-pointer"
                 >
-                  <LogOut className="w-3.5 h-3.5 shrink-0" />
+                  <LogOut className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   <span>Sign Out</span>
                 </button>
               </div>
@@ -1051,28 +1092,15 @@ export default function App() {
             <div className="fixed inset-0 z-50 lg:hidden flex bg-black/50">
               <aside className="w-64 bg-[var(--sentinel-suede)] h-full border-r border-[var(--sentinel-border)] flex flex-col">
                 <div className="h-14 px-4 flex items-center justify-between gap-2 border-b border-[var(--sentinel-border-soft)] bg-[var(--sentinel-nude)]">
-                  <BrandMark logoUrl={customLogoUrl} size="sm" />
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        setLogoModalOpen(true);
-                      }}
-                      aria-label="Upload workspace logo"
-                      className="p-2 rounded-md text-[var(--sentinel-accent)] hover:bg-[var(--sentinel-hover)] cursor-pointer"
-                    >
-                      <ImagePlus className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMobileMenuOpen(false)}
-                      aria-label="Close navigation menu"
-                      className="p-2 text-[var(--sentinel-ink-secondary)] hover:text-[var(--sentinel-ink)] cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <BrandMark size="sm" />
+                  <button
+                    type="button"
+                    onClick={() => setMobileMenuOpen(false)}
+                    aria-label="Close navigation menu"
+                    className="p-2 text-[var(--sentinel-ink-secondary)] hover:text-[var(--sentinel-ink)] cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
 
                 <div className="p-3 border-b border-[var(--sentinel-border-soft)] bg-[var(--sentinel-nude)]/60 space-y-2">
@@ -1138,6 +1166,7 @@ export default function App() {
                 </nav>
 
                 <div className="p-3 border-t border-[var(--sentinel-border-soft)] space-y-2">
+                  <PWAInstallButton variant="sidebar" />
                   <p className="text-xs font-semibold text-[var(--sentinel-ink)] truncate">
                     {operatorDisplayName}
                   </p>
@@ -1150,7 +1179,7 @@ export default function App() {
                       }}
                       className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold rounded-md border border-[var(--sentinel-border)] bg-[var(--sentinel-suede)] text-[var(--sentinel-ink)] cursor-pointer"
                     >
-                      <Home className="w-3.5 h-3.5" />
+                      <Home className="w-3.5 h-3.5" aria-hidden="true" />
                       <span>Landing</span>
                     </button>
                     <button
@@ -1158,7 +1187,7 @@ export default function App() {
                       onClick={() => void handleSignOut()}
                       className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold rounded-md border border-[var(--sentinel-border)] bg-[var(--sentinel-nude)] text-[var(--sentinel-ink)] cursor-pointer"
                     >
-                      <LogOut className="w-3.5 h-3.5" />
+                      <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
                       <span>Sign Out</span>
                     </button>
                   </div>
@@ -1217,6 +1246,23 @@ export default function App() {
                   </select>
                 </label>
 
+                {/* Accessibility Preferences Trigger */}
+                <button
+                  type="button"
+                  onClick={() => setA11yModalOpen(true)}
+                  data-testid="topbar-a11y-btn"
+                  aria-label="Open accessibility and display preferences"
+                  title="Accessibility & Display"
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    a11yPrefs.highContrast || a11yPrefs.textScale !== 'md' || a11yPrefs.reduceMotion
+                      ? 'border-[var(--sentinel-accent)] bg-[var(--sentinel-accent-soft)] text-[var(--sentinel-accent-soft-ink)]'
+                      : 'border-[var(--sentinel-border)] bg-[var(--sentinel-suede)] text-[var(--sentinel-ink)] hover:border-[var(--sentinel-accent)]'
+                  }`}
+                >
+                  <Accessibility className="w-3.5 h-3.5 text-[var(--sentinel-accent)]" aria-hidden="true" />
+                  <span className="hidden xl:inline">Accessibility</span>
+                </button>
+
                 {/* Dark / Light Mode Toggle */}
                 <button
                   type="button"
@@ -1227,9 +1273,9 @@ export default function App() {
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-md border border-[var(--sentinel-border)] bg-[var(--sentinel-suede)] text-[var(--sentinel-ink)] hover:border-[var(--sentinel-accent)] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   {theme === 'light' ? (
-                    <Moon className="w-3.5 h-3.5 text-[var(--sentinel-ink-secondary)]" />
+                    <Moon className="w-3.5 h-3.5 text-[var(--sentinel-ink-secondary)]" aria-hidden="true" />
                   ) : (
-                    <Sun className="w-3.5 h-3.5 text-[#FBBF24]" />
+                    <Sun className="w-3.5 h-3.5 text-[#FBBF24]" aria-hidden="true" />
                   )}
                   <span className="hidden md:inline">
                     {theme === 'light' ? copy.darkMode : copy.lightMode}
@@ -1360,7 +1406,11 @@ export default function App() {
             )}
 
             {/* Main Scrollable Viewport */}
-            <main className="flex-1 p-4 lg:p-6 max-w-[1440px] w-full mx-auto">
+            <main
+              id="main-content"
+              tabIndex={-1}
+              className="flex-1 p-4 lg:p-6 max-w-[1440px] w-full mx-auto focus:outline-none"
+            >
               {activeDrill && (() => {
                 const scenario = getBreachDrillScenario(activeDrill.scenarioId);
                 if (!scenario) return null;
@@ -1459,122 +1509,124 @@ export default function App() {
                   </button>
                 </div>
               ) : (
-                <>
-                  {activeView === 'overview' && (
-                    <OverviewAlertsView
-                      snapshot={snapshot}
-                      copy={copy}
-                      selectedAlertId={selectedAlertId}
-                      onSelectAlert={setSelectedAlertId}
-                      onFeedback={handleFeedback}
-                      onExecuteResponse={handleExecuteResponse}
-                      onUndoResponse={handleUndoResponse}
-                      onResolveAlert={handleResolveAlert}
-                      onUnblockSession={handleUnblockSession}
-                      onInspectLogSpot={handleInspectLogSpot}
-                      onOpenView={setActiveView}
-                      onStartDemo={handleStartDemo}
-                      onOpenPhoneAttackerModal={() => setPhoneModalOpen(true)}
-                      onOpenBreachDrill={() => setDrillModalOpen(true)}
-                      drillActive={Boolean(
-                        activeDrill &&
-                          (activeDrill.status === 'running' || activeDrill.status === 'paused'),
-                      )}
-                      onRefreshAlerts={refresh}
-                      lastSyncedAt={lastSyncedAt}
-                      busyAction={busyAction}
-                    />
-                  )}
+                <AppErrorBoundary key={activeView} sectionLabel={portalLabel}>
+                  <Suspense fallback={lazyViewFallback}>
+                    {activeView === 'overview' && (
+                      <OverviewAlertsView
+                        snapshot={snapshot}
+                        copy={copy}
+                        selectedAlertId={selectedAlertId}
+                        onSelectAlert={setSelectedAlertId}
+                        onFeedback={handleFeedback}
+                        onExecuteResponse={handleExecuteResponse}
+                        onUndoResponse={handleUndoResponse}
+                        onResolveAlert={handleResolveAlert}
+                        onUnblockSession={handleUnblockSession}
+                        onInspectLogSpot={handleInspectLogSpot}
+                        onOpenView={setActiveView}
+                        onStartDemo={handleStartDemo}
+                        onOpenPhoneAttackerModal={() => setPhoneModalOpen(true)}
+                        onOpenBreachDrill={() => setDrillModalOpen(true)}
+                        drillActive={Boolean(
+                          activeDrill &&
+                            (activeDrill.status === 'running' || activeDrill.status === 'paused'),
+                        )}
+                        onRefreshAlerts={refresh}
+                        lastSyncedAt={lastSyncedAt}
+                        busyAction={busyAction}
+                      />
+                    )}
 
-                  {activeView === 'executive' && (
-                    <ExecutivePortalView
-                      snapshot={snapshot}
-                      copy={copy}
-                      onResolveHold={handleResolveHold}
-                      onResolveAlert={(alertId) =>
-                        handleResolveAlert(alertId, 'Resolved via Admin Executive & Board View')
-                      }
-                      onInspectLogSpot={handleInspectLogSpot}
-                      onSwitchToSecOps={jumpToAlert}
-                      busyAction={busyAction}
-                    />
-                  )}
+                    {activeView === 'executive' && (
+                      <ExecutivePortalView
+                        snapshot={snapshot}
+                        copy={copy}
+                        onResolveHold={handleResolveHold}
+                        onResolveAlert={(alertId) =>
+                          handleResolveAlert(alertId, 'Resolved via Admin Executive & Board View')
+                        }
+                        onInspectLogSpot={handleInspectLogSpot}
+                        onSwitchToSecOps={jumpToAlert}
+                        busyAction={busyAction}
+                      />
+                    )}
 
-                  {activeView === 'fingerprints' && (
-                    <FingerprintsView
-                      snapshot={snapshot}
-                      selectedFpId={selectedFpId}
-                      onSelectFp={setSelectedFpId}
-                      onSimulateAnomaly={handleSimulateFingerprintEvent}
-                      onJumpToAlert={jumpToAlert}
-                      busyAction={busyAction}
-                    />
-                  )}
+                    {activeView === 'fingerprints' && (
+                      <FingerprintsView
+                        snapshot={snapshot}
+                        selectedFpId={selectedFpId}
+                        onSelectFp={setSelectedFpId}
+                        onSimulateAnomaly={handleSimulateFingerprintEvent}
+                        onJumpToAlert={jumpToAlert}
+                        busyAction={busyAction}
+                      />
+                    )}
 
-                  {activeView === 'honey_traps' && (
-                    <HoneyTrapsView
-                      snapshot={snapshot}
-                      onTriggerTrap={handleTriggerTrap}
-                      onCreateTrap={handleCreateTrap}
-                      onUnblockSession={handleUnblockSession}
-                      busyAction={busyAction}
-                    />
-                  )}
+                    {activeView === 'honey_traps' && (
+                      <HoneyTrapsView
+                        snapshot={snapshot}
+                        onTriggerTrap={handleTriggerTrap}
+                        onCreateTrap={handleCreateTrap}
+                        onUnblockSession={handleUnblockSession}
+                        busyAction={busyAction}
+                      />
+                    )}
 
-                  {activeView === 'drift_toolkit' && (
-                    <DriftToolkitView
-                      snapshot={snapshot}
-                      onResolveHold={handleResolveHold}
-                      onScanTicket={handleScanTicket}
-                      busyAction={busyAction}
-                    />
-                  )}
+                    {activeView === 'drift_toolkit' && (
+                      <DriftToolkitView
+                        snapshot={snapshot}
+                        onResolveHold={handleResolveHold}
+                        onScanTicket={handleScanTicket}
+                        busyAction={busyAction}
+                      />
+                    )}
 
-                  {activeView === 'vault' && (
-                    <VaultIngestView
-                      snapshot={snapshot}
-                      highlightedVaultSeq={highlightedVaultSeq}
-                      highlightedAlertId={highlightedAlertId}
-                      onClearHighlight={() => {
-                        setHighlightedVaultSeq(null);
-                        setHighlightedAlertId(null);
-                      }}
-                      onResolveAlert={handleResolveAlert}
-                      onReturnToAlert={(alertId) => {
-                        setSelectedAlertId(alertId);
-                        setActiveView('overview');
-                      }}
-                      onIngestEvent={handleIngestEvent}
-                      busyAction={busyAction}
-                    />
-                  )}
+                    {activeView === 'vault' && (
+                      <VaultIngestView
+                        snapshot={snapshot}
+                        highlightedVaultSeq={highlightedVaultSeq}
+                        highlightedAlertId={highlightedAlertId}
+                        onClearHighlight={() => {
+                          setHighlightedVaultSeq(null);
+                          setHighlightedAlertId(null);
+                        }}
+                        onResolveAlert={handleResolveAlert}
+                        onReturnToAlert={(alertId) => {
+                          setSelectedAlertId(alertId);
+                          setActiveView('overview');
+                        }}
+                        onIngestEvent={handleIngestEvent}
+                        busyAction={busyAction}
+                      />
+                    )}
 
-                  {activeView === 'webhooks' && (
-                    <WebhooksNotificationsView
-                      snapshot={snapshot}
-                      wsStatus={wsStatus}
-                      browserPushPermission={browserPushPermission}
-                      onRequestBrowserPush={requestBrowserPush}
-                      onUpdatePrefs={handleUpdateNotificationPrefs}
-                      onAddWebhook={handleAddWebhook}
-                      onToggleWebhook={handleToggleWebhook}
-                      onDeleteWebhook={handleDeleteWebhook}
-                      onTestWebhook={handleTestWebhook}
-                      busyAction={busyAction}
-                    />
-                  )}
+                    {activeView === 'webhooks' && (
+                      <WebhooksNotificationsView
+                        snapshot={snapshot}
+                        wsStatus={wsStatus}
+                        browserPushPermission={browserPushPermission}
+                        onRequestBrowserPush={requestBrowserPush}
+                        onUpdatePrefs={handleUpdateNotificationPrefs}
+                        onAddWebhook={handleAddWebhook}
+                        onToggleWebhook={handleToggleWebhook}
+                        onDeleteWebhook={handleDeleteWebhook}
+                        onTestWebhook={handleTestWebhook}
+                        busyAction={busyAction}
+                      />
+                    )}
 
-                  {activeView === 'ai_studio' && (
-                    <AiStudioView
-                      snapshot={snapshot}
-                      onScanTranscript={handleScanTicket}
-                    />
-                  )}
+                    {activeView === 'ai_studio' && (
+                      <AiStudioView
+                        snapshot={snapshot}
+                        onScanTranscript={handleScanTicket}
+                      />
+                    )}
 
-                  {activeView === 'architecture' && (
-                    <ArchitectureIntegrationView snapshot={snapshot} />
-                  )}
-                </>
+                    {activeView === 'architecture' && (
+                      <ArchitectureIntegrationView snapshot={snapshot} />
+                    )}
+                  </Suspense>
+                </AppErrorBoundary>
               )}
             </main>
           </div>
@@ -1625,12 +1677,13 @@ export default function App() {
         </div>
       )}
       </ProtectedPortalWrapper>
-      <BrandLogoModal
-        open={logoModalOpen}
-        currentLogoUrl={customLogoUrl}
-        onClose={() => setLogoModalOpen(false)}
-        onSaveLogo={handleSaveCustomLogo}
+      <AccessibilityModal
+        open={a11yModalOpen}
+        prefs={a11yPrefs}
+        onChange={setA11yPrefs}
+        onClose={() => setA11yModalOpen(false)}
       />
+      <OfflineIndicator />
     </>
   );
 }
