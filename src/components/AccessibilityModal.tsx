@@ -102,6 +102,9 @@ export function AccessibilityModal({
       aria-modal="true"
       aria-labelledby="a11y-modal-title"
       data-testid="accessibility-modal"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="window-suede rounded-lg w-full max-w-md shadow-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-[var(--sentinel-border)] bg-[var(--sentinel-nude)] flex items-center justify-between gap-3">

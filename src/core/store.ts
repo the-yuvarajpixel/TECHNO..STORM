@@ -98,15 +98,26 @@ export class SentinelEngineStore {
       this.dataPlane = createSeedDataPlane(this.controlPlane, this.edgeSalt);
     }
 
-    // If SENTINEL_WEBHOOK_URL env var is supplied for deployment, ensure it is registered
-    if (options?.webhookUrl && options.webhookUrl.startsWith('http')) {
-      const exists = this.dataPlane.webhooks.some((w) => w.url === options.webhookUrl);
+    // If SENTINEL_WEBHOOK_URL env var is supplied for deployment, validate strictly before registering
+    const safeEnvWebhookUrl = (() => {
+      const raw = (options?.webhookUrl ?? '').trim().replace(/^['"]+|['"]+$/g, '').trim();
+      if (!raw || /[\s[\]()<>]/.test(raw) || !/^https?:\/\//i.test(raw)) return null;
+      try {
+        const parsed = new URL(raw);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null;
+      } catch {
+        return null;
+      }
+    })();
+
+    if (safeEnvWebhookUrl) {
+      const exists = this.dataPlane.webhooks.some((w) => w.url === safeEnvWebhookUrl);
       if (!exists) {
         this.dataPlane.webhooks.unshift({
           id: 'wh_env_primary',
           name: 'Deployment Env Webhook (SENTINEL_WEBHOOK_URL)',
-          provider: options.webhookUrl.includes('hooks.slack.com') ? 'slack' : 'generic_json',
-          url: options.webhookUrl,
+          provider: safeEnvWebhookUrl.includes('hooks.slack.com') ? 'slack' : 'generic_json',
+          url: safeEnvWebhookUrl,
           signingSecretPreview: `${this.webhookSigningSecret.slice(0, 10)}…${this.webhookSigningSecret.slice(-4)}`,
           enabled: true,
           minSeverity: 'low',

@@ -42,6 +42,15 @@ export function createSentinelApiApp(options?: CreateSentinelApiOptions): {
   const app = express();
   app.use(express.json({ limit: '25mb' }));
 
+  // Return structured JSON 400 on malformed JSON bodies instead of Express HTML error pages
+  app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err && typeof err === 'object' && 'status' in err && (err as { status?: number }).status === 400) {
+      res.status(400).json({ error: 'Invalid JSON request payload.' });
+      return;
+    }
+    next(err);
+  });
+
   // Baseline security & popup-auth compatibility headers (iframe-safe)
   app.use((_req, res, next) => {
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');

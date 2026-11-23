@@ -89,6 +89,9 @@ export function PWAInstallButton({ variant = 'footer' }: PWAInstallButtonProps) 
           aria-modal="true"
           aria-labelledby="pwa-install-guide-title"
           data-testid="pwa-install-guide-modal"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setGuideOpen(false);
+          }}
         >
           <div className="window-suede rounded-lg w-full max-w-lg shadow-2xl overflow-hidden text-left">
             <div className="px-5 py-4 border-b border-[var(--sentinel-border)] bg-[var(--sentinel-nude)] flex items-center justify-between gap-3">

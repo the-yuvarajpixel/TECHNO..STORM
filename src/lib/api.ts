@@ -5,9 +5,12 @@ import type {
   BreachDrillStepExecutionResult,
 } from '../core/breachDrill';
 
-const API_BASE_URL = (
-  (import.meta.env?.VITE_API_BASE_URL as string | undefined) || ''
-).replace(/\/+$/, '');
+import { resolveApiBaseUrl, resolveSentinelWsUrl } from './apiUrl';
+
+const API_BASE_URL = resolveApiBaseUrl(
+  import.meta.env?.VITE_API_BASE_URL as string | undefined,
+  typeof window !== 'undefined' ? window.location.hostname : '',
+);
 
 function buildApiUrl(path: string): string {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
@@ -409,13 +412,7 @@ export const sentinelApi = {
 };
 
 export function buildSentinelWsUrl(path: string): string {
-  if (API_BASE_URL) {
-    const parsed = new URL(API_BASE_URL, window.location.origin);
-    const proto = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${proto}//${parsed.host}${path}`;
-  }
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${proto}//${window.location.host}${path}`;
+  return resolveSentinelWsUrl(path, API_BASE_URL, window.location);
 }
 
 export function useSentinelRealtime(portalRole: 'secops' | 'executive' | 'attacker' = 'secops') {
@@ -529,21 +526,8 @@ export function useSentinelRealtime(portalRole: 'secops' | 'executive' | 'attack
     const connect = () => {
       if (closedByCleanup) return;
 
-      // Determine WebSocket target URL (respecting optional VITE_API_BASE_URL)
-      let wsUrl: string;
-      if (API_BASE_URL) {
-        try {
-          const parsed = new URL(API_BASE_URL);
-          const protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
-          wsUrl = `${protocol}//${parsed.host}/ws/notifications`;
-        } catch {
-          startHttpLiveSync();
-          return;
-        }
-      } else {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        wsUrl = `${protocol}//${window.location.host}/ws/notifications`;
-      }
+      // Determine WebSocket target URL (sanitized, same-origin on full-stack hosts)
+      const wsUrl = buildSentinelWsUrl('/ws/notifications');
 
       try {
         ws = new WebSocket(wsUrl);

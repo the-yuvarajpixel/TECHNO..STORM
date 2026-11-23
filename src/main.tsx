@@ -7,7 +7,12 @@ import './index.css';
 
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   try {
-    registerSW({ immediate: true });
+    registerSW({
+      immediate: true,
+      onRegisterError() {
+        // Ignore service worker registration errors in restricted preview sandboxes
+      },
+    });
   } catch {
     // Ignore service worker registration errors in restricted preview sandboxes
   }
