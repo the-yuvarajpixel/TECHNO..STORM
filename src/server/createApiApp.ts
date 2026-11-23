@@ -245,6 +245,44 @@ export function createSentinelApiApp(options?: CreateSentinelApiOptions): {
     }
   });
 
+  app.post('/api/alerts/batch', (req, res) => {
+    const { alertIds, action, operator, note } = req.body ?? {};
+    if (!Array.isArray(alertIds) || alertIds.length === 0 || alertIds.length > 100) {
+      res.status(400).json({
+        error: 'alertIds must be a non-empty array containing between 1 and 100 alert IDs.',
+      });
+      return;
+    }
+    if (action !== 'dismiss' && action !== 'resolve') {
+      res.status(400).json({ error: 'action must be "dismiss" or "resolve".' });
+      return;
+    }
+    const sanitizedIds = alertIds.filter(
+      (id): id is string => typeof id === 'string' && id.trim().length > 0,
+    );
+    if (sanitizedIds.length === 0) {
+      res.status(400).json({ error: 'alertIds must contain valid alert ID strings.' });
+      return;
+    }
+
+    try {
+      const result = store.batchOperateAlerts(
+        sanitizedIds,
+        action,
+        typeof operator === 'string' && operator.trim() ? operator.trim() : 'E. Vance (SecOps)',
+        typeof note === 'string' ? note.slice(0, 500) : '',
+      );
+      res.json({
+        ...result,
+        snapshot: store.getSnapshot(),
+      });
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : 'Batch alert operation failed',
+      });
+    }
+  });
+
   // --- Cross-Device Manual Demo Attacker Endpoints ---
   app.post('/api/attacker/action', async (req, res) => {
     const body = req.body ?? {};

@@ -1216,6 +1216,160 @@ export class SentinelEngineStore {
     return alert;
   }
 
+  public batchOperateAlerts(
+    alertIds: string[],
+    action: 'dismiss' | 'resolve',
+    operator = 'E. Vance (SecOps)',
+    note = '',
+  ): {
+    action: 'dismiss' | 'resolve';
+    updatedIds: string[];
+    skippedIds: string[];
+    notFoundIds: string[];
+    vaultSequences: number[];
+  } {
+    const uniqueIds = Array.from(
+      new Set(
+        alertIds
+          .filter((id): id is string => typeof id === 'string')
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0),
+      ),
+    );
+
+    if (uniqueIds.length === 0) {
+      throw new Error('At least one alert ID is required for a batch operation.');
+    }
+
+    const updatedIds: string[] = [];
+    const skippedIds: string[] = [];
+    const notFoundIds: string[] = [];
+    const vaultSequences: number[] = [];
+    const nowIso = new Date().toISOString();
+    const cleanNote = note.trim();
+
+    for (const alertId of uniqueIds) {
+      const alert = this.dataPlane.alerts.find((a) => a.id === alertId);
+      if (!alert) {
+        notFoundIds.push(alertId);
+        continue;
+      }
+
+      if (action === 'resolve') {
+        if (alert.status === 'resolved') {
+          skippedIds.push(alert.id);
+          continue;
+        }
+        alert.status = 'resolved';
+        alert.resolvedAt = nowIso;
+        alert.resolvedBy = operator;
+        alert.resolutionNote =
+          cleanNote || 'Batch-resolved by security analyst and verified in hash-chained vault.';
+
+        if (alert.id === 'alt_payroll_03am') {
+          const ctrl = this.dataPlane.assertions.find((c) => c.id === 'ctrl_01');
+          if (ctrl) {
+            ctrl.status = 'aligned';
+            ctrl.observedReality = `Resolved by ${operator} (batch triage); CIDR restriction enforced and verified in log vault.`;
+            ctrl.lastCheckedAt = nowIso;
+          }
+        }
+
+        const entry = appendVaultEntry(this.dataPlane.vaultEntries, {
+          entryType: 'alert_resolved',
+          actor: operator,
+          summary: `Batch resolved alert "${alert.title}" (${alert.actorLabel})`,
+          redactionsCount: 0,
+          payloadForDigest: `batch_resolve|${alert.id}|${alert.resolutionNote}`,
+          region: this.controlPlane.region,
+          customerKeyFingerprint: this.controlPlane.customerKeyFingerprint,
+          sourceSystem: alert.sourceSystem,
+          sourceIp: alert.sourceIp,
+          logFileRef: alert.logFileRef,
+          redactedSnippet: alert.resolutionNote,
+          matchedIndicator: `Batch resolved · ref Vault #${alert.sourceVaultSequence}`,
+        });
+        this.dataPlane.vaultEntries.push(entry);
+        vaultSequences.push(entry.sequence);
+        updatedIds.push(alert.id);
+      } else {
+        if (alert.status === 'dismissed') {
+          skippedIds.push(alert.id);
+          continue;
+        }
+        const fpIdx = this.dataPlane.fingerprints.findIndex(
+          (f) => f.canonicalActorId === alert.canonicalActorId,
+        );
+        if (fpIdx >= 0) {
+          this.dataPlane.fingerprints[fpIdx] = applyFingerprintFeedback(
+            this.dataPlane.fingerprints[fpIdx],
+            alert,
+            'dismiss',
+          );
+        }
+
+        const dismissNote =
+          cleanNote || 'Batch-dismissed as expected; baseline updated to reduce future false alarms.';
+        alert.feedbackHistory.push({
+          decision: 'dismiss',
+          operator,
+          note: dismissNote,
+          timestamp: nowIso,
+        });
+        alert.status = 'dismissed';
+
+        const entry = appendVaultEntry(this.dataPlane.vaultEntries, {
+          entryType: 'operator_feedback',
+          actor: operator,
+          summary: `Batch dismissed & learned alert ${alert.id} (${alert.actorLabel})`,
+          redactionsCount: 0,
+          payloadForDigest: `batch_dismiss|${alert.id}|${dismissNote}`,
+          region: this.controlPlane.region,
+          customerKeyFingerprint: this.controlPlane.customerKeyFingerprint,
+          sourceSystem: alert.sourceSystem,
+          sourceIp: alert.sourceIp,
+          logFileRef: alert.logFileRef,
+          redactedSnippet: dismissNote,
+          matchedIndicator: `Batch dismissed · ref Vault #${alert.sourceVaultSequence}`,
+        });
+        this.dataPlane.vaultEntries.push(entry);
+        vaultSequences.push(entry.sequence);
+        updatedIds.push(alert.id);
+      }
+    }
+
+    if (updatedIds.length > 0) {
+      const actionVerb = action === 'resolve' ? 'Resolved' : 'Dismissed';
+      const firstSeq = vaultSequences[0];
+      const lastSeq = vaultSequences[vaultSequences.length - 1];
+      const seqSpan =
+        vaultSequences.length === 1 ? `Vault #${firstSeq}` : `Vault #${firstSeq}–#${lastSeq}`;
+
+      this.pushNotification({
+        severity: 'low',
+        title: `Batch ${actionVerb}: ${updatedIds.length} alert${updatedIds.length === 1 ? '' : 's'}`,
+        message: `${operator} ${actionVerb.toLowerCase()} ${updatedIds.length} alert${updatedIds.length === 1 ? '' : 's'} (${seqSpan}).`,
+        alertId: updatedIds[0],
+        vaultSequence: lastSeq,
+      });
+
+      this.saveToDisk();
+      this.broadcast('state:updated', {
+        reason: 'alerts_batch_updated',
+        action,
+        updatedIds,
+      });
+    }
+
+    return {
+      action,
+      updatedIds,
+      skippedIds,
+      notFoundIds,
+      vaultSequences,
+    };
+  }
+
   /**
    * Cross-Device Manual Demo Attacker Portal handler:
    * - Intercepts already-quarantined sessions immediately (HTTP 403 TRAPPED & BLOCKED).

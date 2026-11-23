@@ -163,6 +163,24 @@ export const sentinelApi = {
       },
     ),
 
+  batchOperateAlerts: (payload: {
+    alertIds: string[];
+    action: 'dismiss' | 'resolve';
+    note?: string;
+    operator?: string;
+  }) =>
+    requestJson<{
+      action: 'dismiss' | 'resolve';
+      updatedIds: string[];
+      skippedIds: string[];
+      notFoundIds: string[];
+      vaultSequences: number[];
+      snapshot: SystemSnapshot;
+    }>('/api/alerts/batch', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   runAttackerAction: (payload: {
     actionType:
       | 'mutate_api_key'

@@ -16,9 +16,18 @@ import {
   X,
 } from 'lucide-react';
 import type { SecurityAlert, SystemSnapshot } from '../core/types';
+import {
+  pruneSelectionToExisting,
+  summarizeBatchSelection,
+  toggleAlertSelection,
+  toggleSelectAllVisible,
+  type BatchAlertAction,
+  type BatchAlertOperationResult,
+} from '../core/batchAlerts';
 import type { UiCopy } from '../lib/i18n';
 import { formatRelativeTime, formatUtcTime, severityLabel, severityTextClass } from '../lib/format';
 import { downloadCsvFile, formatAuditExportDate } from '../lib/csv';
+import { BatchAlertConfirmModal } from './BatchAlertConfirmModal';
 import {
   INITIAL_FILTER_STATE,
   SearchFilterBar,
@@ -35,6 +44,11 @@ interface OverviewAlertsViewProps {
   onExecuteResponse: (alertId: string, optionId: string) => Promise<void>;
   onUndoResponse: (alertId: string) => Promise<void>;
   onResolveAlert: (alertId: string, note?: string) => Promise<void>;
+  onBatchOperateAlerts: (
+    alertIds: string[],
+    action: BatchAlertAction,
+    note?: string,
+  ) => Promise<BatchAlertOperationResult | null>;
   onUnblockSession?: (sourceIp: string) => Promise<void>;
   onInspectLogSpot: (vaultSequence: number, alertId: string) => void;
   onOpenView: (view: 'fingerprints' | 'honey_traps' | 'drift_toolkit' | 'vault' | 'architecture') => void;
@@ -67,6 +81,7 @@ export function OverviewAlertsView({
   onExecuteResponse,
   onUndoResponse,
   onResolveAlert,
+  onBatchOperateAlerts,
   onUnblockSession,
   onInspectLogSpot,
   onOpenView,
@@ -78,8 +93,16 @@ export function OverviewAlertsView({
   lastSyncedAt,
   busyAction,
 }: OverviewAlertsViewProps) {
-  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'contained' | 'resolved'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'contained' | 'dismissed' | 'resolved'>('all');
   const [filterState, setFilterState] = useState<FilterBarState>(INITIAL_FILTER_STATE);
+  const [selectedBatchIds, setSelectedBatchIds] = useState<Set<string>>(() => new Set());
+  const [pendingBatchAction, setPendingBatchAction] = useState<BatchAlertAction | null>(null);
+  const [batchResultNotice, setBatchResultNotice] = useState<{
+    action: BatchAlertAction;
+    updatedCount: number;
+    skippedCount: number;
+    vaultSpan: string | null;
+  } | null>(null);
   const [selectedOptionByAlert, setSelectedOptionByAlert] = useState<Record<string, string>>({});
   const [feedbackNote, setFeedbackNote] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -88,6 +111,7 @@ export function OverviewAlertsView({
   const [isSyncing, setIsSyncing] = useState(false);
   const [pollFailed, setPollFailed] = useState(false);
   const settingsRef = useRef<HTMLDivElement | null>(null);
+  const selectAllCheckboxRef = useRef<HTMLInputElement | null>(null);
   const syncingRef = useRef(false);
   const remainingRef = useRef<number>(AUTO_REFRESH_INTERVAL_SEC);
   const lastPollMsRef = useRef<number>(Date.now());
@@ -221,6 +245,75 @@ export function OverviewAlertsView({
       );
     });
   }, [snapshot.alerts, statusFilter, filterState]);
+
+  // Prune any batch selections whose alert IDs no longer exist in the current snapshot
+  useEffect(() => {
+    const existingIds = new Set(snapshot.alerts.map((a) => a.id));
+    setSelectedBatchIds((prev) => {
+      if (prev.size === 0) return prev;
+      const pruned = pruneSelectionToExisting(prev, existingIds);
+      return pruned.size === prev.size ? prev : pruned;
+    });
+  }, [snapshot.alerts]);
+
+  const visibleAlertIds = useMemo(() => filteredAlerts.map((a) => a.id), [filteredAlerts]);
+  const visibleSelectedCount = useMemo(
+    () => visibleAlertIds.filter((id) => selectedBatchIds.has(id)).length,
+    [visibleAlertIds, selectedBatchIds],
+  );
+  const allVisibleSelected =
+    visibleAlertIds.length > 0 && visibleSelectedCount === visibleAlertIds.length;
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate = someVisibleSelected;
+    }
+  }, [someVisibleSelected]);
+
+  const resolveBatchSummary = useMemo(
+    () => summarizeBatchSelection(snapshot.alerts, selectedBatchIds, 'resolve'),
+    [snapshot.alerts, selectedBatchIds],
+  );
+  const dismissBatchSummary = useMemo(
+    () => summarizeBatchSelection(snapshot.alerts, selectedBatchIds, 'dismiss'),
+    [snapshot.alerts, selectedBatchIds],
+  );
+  const pendingBatchSummary =
+    pendingBatchAction === 'resolve'
+      ? resolveBatchSummary
+      : pendingBatchAction === 'dismiss'
+        ? dismissBatchSummary
+        : null;
+
+  const handleConfirmBatchAction = async (note: string) => {
+    if (!pendingBatchAction || !pendingBatchSummary) return;
+    const targetIds = pendingBatchSummary.eligibleAlerts.map((a) => a.id);
+    if (targetIds.length === 0) {
+      setPendingBatchAction(null);
+      return;
+    }
+
+    const result = await onBatchOperateAlerts(targetIds, pendingBatchAction, note);
+    setPendingBatchAction(null);
+    if (result) {
+      setSelectedBatchIds(new Set());
+      const firstSeq = result.vaultSequences[0];
+      const lastSeq = result.vaultSequences[result.vaultSequences.length - 1];
+      const vaultSpan =
+        result.vaultSequences.length === 0
+          ? null
+          : result.vaultSequences.length === 1
+            ? `Vault #${firstSeq}`
+            : `Vault #${firstSeq}–#${lastSeq}`;
+      setBatchResultNotice({
+        action: result.action,
+        updatedCount: result.updatedIds.length,
+        skippedCount: result.skippedIds.length + pendingBatchSummary.skippedAlerts.length,
+        vaultSpan,
+      });
+    }
+  };
 
   const activeAlert: SecurityAlert | null =
     filteredAlerts.find((a) => a.id === selectedAlertId) ??
@@ -538,7 +631,7 @@ export function OverviewAlertsView({
             </div>
 
             <div
-              className="flex items-center gap-1 p-1 bg-[var(--sentinel-segment)] rounded-md"
+              className="flex items-center gap-1 p-1 bg-[var(--sentinel-segment)] rounded-md overflow-x-auto"
               role="tablist"
               aria-label="Filter alerts by status"
             >
@@ -547,6 +640,7 @@ export function OverviewAlertsView({
                   { id: 'all', label: copy.filterAll },
                   { id: 'open', label: copy.filterOpen },
                   { id: 'contained', label: copy.filterContained },
+                  { id: 'dismissed', label: 'Dismissed' },
                   { id: 'resolved', label: copy.filterResolved },
                 ] as const
               ).map((tab) => (
@@ -556,7 +650,7 @@ export function OverviewAlertsView({
                   role="tab"
                   aria-selected={statusFilter === tab.id}
                   onClick={() => setStatusFilter(tab.id)}
-                  className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap cursor-pointer ${
+                  className={`flex-1 px-2 py-1.5 text-[11px] sm:text-xs font-medium rounded transition-colors whitespace-nowrap cursor-pointer ${
                     statusFilter === tab.id
                       ? 'bg-[var(--sentinel-suede)] text-[var(--sentinel-ink)] shadow-xs font-semibold'
                       : 'text-[var(--sentinel-ink-secondary)] hover:text-[var(--sentinel-ink)]'
@@ -566,6 +660,108 @@ export function OverviewAlertsView({
                 </button>
               ))}
             </div>
+
+            {/* Batch Triage Selection & Single-Click Action Bar */}
+            <div
+              data-testid="batch-action-toolbar"
+              className={`pt-2.5 border-t border-[var(--sentinel-divider)] flex flex-wrap items-center justify-between gap-2 ${
+                selectedBatchIds.size > 0
+                  ? 'rounded-md px-2.5 py-2 bg-[var(--sentinel-accent-soft)] border border-[var(--sentinel-accent)]/30'
+                  : ''
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <label className="inline-flex items-center gap-2 text-xs font-medium text-[var(--sentinel-ink)] cursor-pointer select-none">
+                  <input
+                    ref={selectAllCheckboxRef}
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    disabled={visibleAlertIds.length === 0 || busyAction !== null}
+                    onChange={() =>
+                      setSelectedBatchIds((prev) => toggleSelectAllVisible(prev, visibleAlertIds))
+                    }
+                    aria-label="Select all visible alerts"
+                    data-testid="batch-select-all-checkbox"
+                    className="w-4 h-4 rounded border-[var(--sentinel-border)] accent-[var(--sentinel-accent)] cursor-pointer"
+                  />
+                  <span className="whitespace-nowrap font-mono tabular-nums">
+                    {selectedBatchIds.size > 0
+                      ? `${selectedBatchIds.size} selected`
+                      : `Select all (${visibleAlertIds.length})`}
+                  </span>
+                </label>
+
+                {selectedBatchIds.size > 0 && (
+                  <button
+                    type="button"
+                    disabled={busyAction !== null}
+                    onClick={() => setSelectedBatchIds(new Set())}
+                    data-testid="batch-clear-selection-btn"
+                    className="text-xs font-medium text-[var(--sentinel-ink-secondary)] hover:text-[var(--sentinel-ink)] hover:underline whitespace-nowrap cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {selectedBatchIds.size > 0 && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    disabled={busyAction !== null || resolveBatchSummary.eligibleAlerts.length === 0}
+                    onClick={() => setPendingBatchAction('resolve')}
+                    data-testid="batch-resolve-btn"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[var(--sentinel-teal)] hover:bg-[var(--sentinel-teal-hover)] rounded-md transition-colors whitespace-nowrap shrink-0 disabled:opacity-45 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="tabular-nums">
+                      Resolve ({resolveBatchSummary.eligibleAlerts.length})
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyAction !== null || dismissBatchSummary.eligibleAlerts.length === 0}
+                    onClick={() => setPendingBatchAction('dismiss')}
+                    data-testid="batch-dismiss-btn"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[var(--sentinel-ink)] bg-[var(--sentinel-suede)] border border-[var(--sentinel-border)] hover:border-[var(--sentinel-accent)] rounded-md transition-colors whitespace-nowrap shrink-0 disabled:opacity-45 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5 shrink-0" />
+                    <span className="tabular-nums">
+                      Dismiss ({dismissBatchSummary.eligibleAlerts.length})
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {batchResultNotice && (
+              <div
+                role="status"
+                aria-live="polite"
+                data-testid="batch-result-notice"
+                className="flex items-center justify-between gap-2 px-3 py-2 rounded-md bg-[var(--sentinel-teal-soft)] border border-[var(--sentinel-teal)]/40 text-xs text-[var(--sentinel-teal-ink)]"
+              >
+                <span className="font-medium leading-snug">
+                  {batchResultNotice.action === 'resolve' ? 'Resolved' : 'Dismissed'}{' '}
+                  <strong className="font-mono tabular-nums">{batchResultNotice.updatedCount}</strong>{' '}
+                  alert{batchResultNotice.updatedCount === 1 ? '' : 's'}
+                  {batchResultNotice.vaultSpan ? ` · ${batchResultNotice.vaultSpan}` : ''}
+                  {batchResultNotice.skippedCount > 0
+                    ? ` · ${batchResultNotice.skippedCount} already ${
+                        batchResultNotice.action === 'resolve' ? 'resolved' : 'dismissed'
+                      }`
+                    : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setBatchResultNotice(null)}
+                  aria-label="Dismiss batch summary"
+                  className="p-0.5 rounded hover:bg-black/10 cursor-pointer shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="p-3 space-y-2.5" data-testid="alert-list">
@@ -585,57 +781,95 @@ export function OverviewAlertsView({
               </div>
             ) : (
               filteredAlerts.map((alert) => {
-                const isSelected = activeAlert?.id === alert.id;
+                const isInspected = activeAlert?.id === alert.id;
+                const isBatchChecked = selectedBatchIds.has(alert.id);
                 const isUrgentOpen =
                   (alert.status === 'open' || alert.trappedAndBlocked) &&
                   (alert.severity === 'critical' || alert.severity === 'high');
                 return (
-                  <button
+                  <div
                     key={alert.id}
-                    type="button"
-                    onClick={() => onSelectAlert(alert.id)}
-                    className={`w-full text-left p-3.5 rounded-md transition-colors cursor-pointer ${
+                    data-testid={`alert-row-${alert.id}`}
+                    className={`flex items-stretch rounded-md transition-colors ${
                       isUrgentOpen
                         ? alert.severity === 'critical'
-                          ? `alert-pop-critical ${isSelected ? 'ring-2 ring-[var(--sentinel-crit-border)]' : ''}`
-                          : `alert-pop-high ${isSelected ? 'ring-2 ring-[var(--sentinel-high-border)]' : ''}`
-                        : isSelected
+                          ? `alert-pop-critical ${
+                              isInspected
+                                ? 'ring-2 ring-[var(--sentinel-crit-border)]'
+                                : isBatchChecked
+                                  ? 'ring-1 ring-[var(--sentinel-accent)]'
+                                  : ''
+                            }`
+                          : `alert-pop-high ${
+                              isInspected
+                                ? 'ring-2 ring-[var(--sentinel-high-border)]'
+                                : isBatchChecked
+                                  ? 'ring-1 ring-[var(--sentinel-accent)]'
+                                  : ''
+                            }`
+                        : isInspected
                           ? 'bg-[var(--sentinel-teal-soft)] border border-[var(--sentinel-teal)]'
-                          : 'bg-[var(--sentinel-suede)] border border-[var(--sentinel-border)] hover:bg-[var(--sentinel-inset)]'
+                          : isBatchChecked
+                            ? 'bg-[var(--sentinel-accent-soft)]/70 border border-[var(--sentinel-accent)]'
+                            : 'bg-[var(--sentinel-suede)] border border-[var(--sentinel-border)] hover:bg-[var(--sentinel-inset)]'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className={severityTextClass(alert.severity)}>
-                        {severityLabel(alert.severity)} · {Math.round(alert.confidence * 100)}%
-                        {alert.trappedAndBlocked
-                          ? ' · TRAPPED & BLOCKED'
-                          : alert.origin === 'manual_attacker'
-                            ? ' · LIVE ATTACK'
-                            : ''}
-                      </span>
-                      <span className="font-mono tabular-nums text-[var(--sentinel-ink-muted)]">
-                        {formatRelativeTime(alert.createdAt)}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm font-bold text-[var(--sentinel-ink)] leading-snug">
-                      {alert.title}
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--sentinel-ink-secondary)]">
-                      <span className="font-mono">{alert.actorLabel}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="font-mono tabular-nums">{alert.sourceIp}</span>
-                      <span aria-hidden="true">·</span>
-                      <span
-                        className={`capitalize font-semibold ${
-                          alert.status === 'open'
-                            ? 'text-[var(--sentinel-crit)]'
-                            : 'text-[var(--sentinel-teal)]'
-                        }`}
-                      >
-                        {alert.status}
-                      </span>
-                    </div>
-                  </button>
+                    <label
+                      className="flex items-start justify-center pl-3 pr-2 pt-3.5 pb-3 cursor-pointer shrink-0"
+                      title={`Select ${alert.title} for batch action`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isBatchChecked}
+                        disabled={busyAction !== null}
+                        onChange={() =>
+                          setSelectedBatchIds((prev) => toggleAlertSelection(prev, alert.id))
+                        }
+                        aria-label={`Select alert: ${alert.title}`}
+                        data-testid={`select-alert-checkbox-${alert.id}`}
+                        className="w-4 h-4 mt-0.5 rounded border-[var(--sentinel-border)] accent-[var(--sentinel-accent)] cursor-pointer"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => onSelectAlert(alert.id)}
+                      className="flex-1 min-w-0 text-left py-3.5 pr-3.5 pl-1 rounded-r-md cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--sentinel-accent)] focus-visible:-outline-offset-2"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className={severityTextClass(alert.severity)}>
+                          {severityLabel(alert.severity)} · {Math.round(alert.confidence * 100)}%
+                          {alert.trappedAndBlocked
+                            ? ' · TRAPPED & BLOCKED'
+                            : alert.origin === 'manual_attacker'
+                              ? ' · LIVE ATTACK'
+                              : ''}
+                        </span>
+                        <span className="font-mono tabular-nums text-[var(--sentinel-ink-muted)] shrink-0">
+                          {formatRelativeTime(alert.createdAt)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm font-bold text-[var(--sentinel-ink)] leading-snug">
+                        {alert.title}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--sentinel-ink-secondary)]">
+                        <span className="font-mono">{alert.actorLabel}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-mono tabular-nums">{alert.sourceIp}</span>
+                        <span aria-hidden="true">·</span>
+                        <span
+                          className={`capitalize font-semibold ${
+                            alert.status === 'open'
+                              ? 'text-[var(--sentinel-crit)]'
+                              : alert.status === 'dismissed'
+                                ? 'text-[var(--sentinel-ink-muted)]'
+                                : 'text-[var(--sentinel-teal)]'
+                          }`}
+                        >
+                          {alert.status}
+                        </span>
+                      </div>
+                    </button>
+                  </div>
                 );
               })
             )}
@@ -1027,6 +1261,15 @@ export function OverviewAlertsView({
           )}
         </section>
       </div>
+
+      {/* Bulk Action Confirmation Dialog */}
+      <BatchAlertConfirmModal
+        open={pendingBatchAction !== null}
+        summary={pendingBatchSummary}
+        busy={busyAction !== null && busyAction.startsWith('batch:')}
+        onCancel={() => setPendingBatchAction(null)}
+        onConfirm={handleConfirmBatchAction}
+      />
     </div>
   );
 }

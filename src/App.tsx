@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import type { MachineFingerprint, Severity, WebhookEndpoint } from './core/types';
+import type { BatchAlertAction, BatchAlertOperationResult } from './core/batchAlerts';
 import {
   getBreachDrillScenario,
   type BreachDrillScenario,
@@ -508,6 +509,41 @@ export default function App() {
       const res = await sentinelApi.resolveAlert(alertId, note);
       setSnapshot(res.snapshot);
     });
+  };
+
+  const handleBatchOperateAlerts = async (
+    alertIds: string[],
+    action: BatchAlertAction,
+    note?: string,
+  ): Promise<BatchAlertOperationResult | null> => {
+    setBusyAction(`batch:${action}`);
+    setActionError(null);
+    try {
+      const operatorLabel =
+        operatorProfile?.displayName ||
+        user?.displayName ||
+        user?.email ||
+        'E. Vance (SecOps)';
+      const res = await sentinelApi.batchOperateAlerts({
+        alertIds,
+        action,
+        note,
+        operator: operatorLabel,
+      });
+      setSnapshot(res.snapshot);
+      return {
+        action: res.action,
+        updatedIds: res.updatedIds,
+        skippedIds: res.skippedIds,
+        notFoundIds: res.notFoundIds,
+        vaultSequences: res.vaultSequences,
+      };
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Batch alert operation failed');
+      return null;
+    } finally {
+      setBusyAction(null);
+    }
   };
 
   const handleInspectLogSpot = (vaultSequence: number, alertId: string) => {
@@ -1521,6 +1557,7 @@ export default function App() {
                         onExecuteResponse={handleExecuteResponse}
                         onUndoResponse={handleUndoResponse}
                         onResolveAlert={handleResolveAlert}
+                        onBatchOperateAlerts={handleBatchOperateAlerts}
                         onUnblockSession={handleUnblockSession}
                         onInspectLogSpot={handleInspectLogSpot}
                         onOpenView={setActiveView}
